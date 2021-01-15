@@ -1,0 +1,10 @@
+#ifndef _INCL_UTILITIES_REFERENCES
+#define _INCL_UTILITIES_REFERENCES
+
+typedef unsigned int ERROR_TYPE;
+
+#define ERROR_NONE 0
+#define ERROR_FAIL_TO_OPEN 1
+#define ERROR_END_OF_FILE 2
+
+#endif
