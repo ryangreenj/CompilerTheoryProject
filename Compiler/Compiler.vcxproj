@@ -18,6 +18,18 @@
       <Platform>x64</Platform>
     </ProjectConfiguration>
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Include\Lexer\Lexer.h" />
+    <ClInclude Include="Include\References.h" />
+    <ClInclude Include="Include\Utilities\Error.h" />
+    <ClInclude Include="Include\Utilities\FileIn.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="Source\Lexer\Lexer.cpp" />
+    <ClCompile Include="Source\Main.cpp" />
+    <ClCompile Include="Source\Utilities\Error.cpp" />
+    <ClCompile Include="Source\Utilities\FileIn.cpp" />
+  </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
@@ -116,6 +128,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
+      <AdditionalIncludeDirectories>$(ProjectDir)\Include</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -138,18 +151,6 @@
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
   </ItemDefinitionGroup>
-  <ItemGroup>
-    <ClCompile Include="Error.cpp" />
-    <ClCompile Include="FileIn.cpp" />
-    <ClCompile Include="Lexer.cpp" />
-    <ClCompile Include="Main.cpp" />
-  </ItemGroup>
-  <ItemGroup>
-    <ClInclude Include="Error.h" />
-    <ClInclude Include="FileIn.h" />
-    <ClInclude Include="Lexer.h" />
-    <ClInclude Include="References.h" />
-  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

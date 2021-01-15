@@ -13,39 +13,33 @@
       <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
       <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
     </Filter>
-    <Filter Include="Source Files\Lexer">
-      <UniqueIdentifier>{6e547bd7-d965-47c0-a1b6-cdb0ec3be3d8}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="Source Files\Utilities">
-      <UniqueIdentifier>{08260f54-d0c6-44e0-a04d-01c8d5215cf8}</UniqueIdentifier>
-    </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Main.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Lexer.cpp">
-      <Filter>Source Files\Lexer</Filter>
-    </ClCompile>
-    <ClCompile Include="Error.cpp">
-      <Filter>Source Files\Utilities</Filter>
-    </ClCompile>
-    <ClCompile Include="FileIn.cpp">
-      <Filter>Source Files\Utilities</Filter>
-    </ClCompile>
+    <ClInclude Include="Include\Lexer\Lexer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Include\References.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Include\Utilities\Error.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Include\Utilities\FileIn.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Lexer.h">
-      <Filter>Source Files\Lexer</Filter>
-    </ClInclude>
-    <ClInclude Include="Error.h">
-      <Filter>Source Files\Utilities</Filter>
-    </ClInclude>
-    <ClInclude Include="FileIn.h">
-      <Filter>Source Files\Utilities</Filter>
-    </ClInclude>
-    <ClInclude Include="References.h">
+    <ClCompile Include="Source\Lexer\Lexer.cpp">
       <Filter>Source Files</Filter>
-    </ClInclude>
+    </ClCompile>
+    <ClCompile Include="Source\Main.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Utilities\Error.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Utilities\FileIn.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
