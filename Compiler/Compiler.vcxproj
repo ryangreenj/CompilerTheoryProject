@@ -23,6 +23,7 @@
     <ClInclude Include="Include\References.h" />
     <ClInclude Include="Include\Utilities\Error.h" />
     <ClInclude Include="Include\Utilities\FileIn.h" />
+    <ClInclude Include="Include\Utilities\Token.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source\Lexer\Lexer.cpp" />

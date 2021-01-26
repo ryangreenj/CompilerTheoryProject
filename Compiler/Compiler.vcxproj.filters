@@ -27,6 +27,9 @@
     <ClInclude Include="Include\Utilities\FileIn.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Include\Utilities\Token.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Source\Lexer\Lexer.cpp">
