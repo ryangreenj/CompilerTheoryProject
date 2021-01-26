@@ -5,7 +5,6 @@ FileIn::FileIn() : FileIn("") {}
 FileIn::FileIn(std::string inFileName)
 {
     m_inFileName = inFileName;
-    m_inFile = std::ifstream(m_inFileName);
 }
 
 void FileIn::SetFileName(std::string inFileName)
@@ -18,24 +17,61 @@ std::string FileIn::GetFileName()
     return m_inFileName;
 }
 
-ERROR_TYPE FileIn::OpenFile()
+ERROR_TYPE FileIn::LoadFile(std::string inFileName)
 {
-    m_inFile.open(m_inFileName);
-    return IsOpen() ? ERROR_NONE : ERROR_FAIL_TO_OPEN;
-}
+    if (inFileName != "")
+    {
+        SetFileName(inFileName);
+    }
 
-ERROR_TYPE FileIn::CloseFile()
-{
-    m_inFile.close();
+    std::ifstream inFile(m_inFileName, std::ios::in | std::ios::binary);
+    if (!inFile.is_open())
+    {
+        return ERROR_FAIL_TO_OPEN;
+    }
+
+    inFile.seekg(0, std::ios::end);
+    m_fileString.resize(m_maxChar = inFile.tellg());
+    inFile.seekg(0, std::ios::beg);
+    inFile.read(&m_fileString[0], m_fileString.size());
+
+    inFile.close();
+    
+    m_currChar = 0;
+    m_currLine = 0;
+    m_currLineChar = 0;
+
     return ERROR_NONE;
 }
 
-bool FileIn::IsOpen()
+ERROR_TYPE FileIn::GetNextChar(char &c, int &currLine, int &currLineChar)
 {
-    return m_inFile.is_open();
+    ERROR_TYPE error = ERROR_NONE;
+    
+    RET_IF_ERR(this->PeekNextChar(c));
+
+    ++m_currChar;
+
+    currLine = m_currLine;
+    currLineChar = m_currLineChar++;
+
+    if (c == '\n')
+    {
+        ++currLine;
+        currLineChar = 0;
+    }
+
+    return error;
 }
 
-ERROR_TYPE FileIn::GetNextChar(char &c)
+ERROR_TYPE FileIn::PeekNextChar(char &c)
 {
-    return m_inFile.get(c) ? ERROR_NONE : ERROR_END_OF_FILE;
+    if (m_currChar >= m_maxChar)
+    {
+        return ERROR_END_OF_FILE;
+    }
+
+    c = m_fileString[m_currChar];
+
+    return ERROR_NONE;
 }

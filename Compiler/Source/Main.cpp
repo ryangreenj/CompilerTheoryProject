@@ -1,7 +1,7 @@
 #include <iostream>
 #include <string>
 
-#include "References.h"
+#include "Utilities/Error.h"
 #include "Utilities/FileIn.h"
 
 int main(int argc, char* args[])
@@ -14,12 +14,14 @@ int main(int argc, char* args[])
     if (argc == 2)
     {
         inFile = new FileIn(args[1]);
-        error = inFile->OpenFile();
-        
-        if (error == ERROR_NONE)
+
+        RET_IF_ERR(inFile->LoadFile());
+
+        char c;
+        int currLine, currChar;
+        while (inFile->GetNextChar(c, currLine, currChar) != ERROR_END_OF_FILE)
         {
-            std::cout << "OPENED SUCCESSFUL";
-            inFile->CloseFile();
+            std::cout << c;
         }
 
         delete inFile;

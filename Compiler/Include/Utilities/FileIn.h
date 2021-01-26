@@ -4,7 +4,7 @@
 #include <string>
 #include <fstream>
 
-#include "References.h"
+#include "Utilities/Error.h"
 
 class FileIn
 {
@@ -15,15 +15,20 @@ public:
     void SetFileName(std::string inFileName);
     std::string GetFileName();
 
-    ERROR_TYPE OpenFile();
-    ERROR_TYPE CloseFile();
-    bool IsOpen();
+    ERROR_TYPE LoadFile(std::string inFileName = "");
 
-    ERROR_TYPE GetNextChar(char &c);
+    ERROR_TYPE GetNextChar(char &c, int &currLine, int &currLineChar);
+    ERROR_TYPE PeekNextChar(char &c);
 
 private:
     std::string m_inFileName;
-    std::ifstream m_inFile;
+    std::string m_fileString;
+
+    int m_maxChar;
+    int m_currChar;
+
+    int m_currLine;
+    int m_currLineChar;
 };
 
 #endif
