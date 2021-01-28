@@ -9,9 +9,12 @@ typedef unsigned int ERROR_TYPE;
 #define ERROR_FAIL_TO_OPEN 1
 #define ERROR_END_OF_FILE 2
 
+#include <string>
+
 namespace Error
 {
-
+    void ReportError(ERROR_TYPE error, std::string message);
+    void ReportWarning(ERROR_TYPE error, std::string message);
 }
 
 #endif

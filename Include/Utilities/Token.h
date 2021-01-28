@@ -26,8 +26,13 @@ typedef unsigned int TOKEN_TYPE;
 #define T_GREATERTHAN 258
 #define T_LESSTHANEQUALTO 259
 #define T_GREATERTHANEQUALTO 260
-#define T_EQUALS 261
-#define T_NOTEQUALS 262
+#define T_EQUALS 261 // ==
+#define T_NOTEQUALS 262 // !=
+
+#define T_IDENTIFIER 263
+#define T_STRINGCONST 264
+#define T_INTCONST 265
+#define T_DOUBLECONST 266
 
 
 
