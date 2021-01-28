@@ -44,34 +44,47 @@ ERROR_TYPE FileIn::LoadFile(std::string inFileName)
     return ERROR_NONE;
 }
 
-ERROR_TYPE FileIn::GetNextChar(char &c, int &currLine, int &currLineChar)
-{
-    ERROR_TYPE error = ERROR_NONE;
-    
-    RET_IF_ERR(this->PeekNextChar(c));
-
-    ++m_currChar;
-
-    currLine = m_currLine;
-    currLineChar = m_currLineChar++;
-
-    if (c == '\n')
-    {
-        ++currLine;
-        currLineChar = 0;
-    }
-
-    return error;
-}
-
-ERROR_TYPE FileIn::PeekNextChar(char &c)
+ERROR_TYPE FileIn::AdvanceChar(int &currLine, int &currLineChar)
 {
     if (m_currChar >= m_maxChar)
     {
         return ERROR_END_OF_FILE;
     }
 
-    c = m_fileString[m_currChar];
+    if (m_fileString[m_currChar] == '\n')
+    {
+        ++m_currLine;
+        m_currLineChar = 0;
+    }
+
+    ++m_currChar;
+
+    currLine = m_currLine;
+    currLineChar = m_currLineChar++;
+
+    return ERROR_NONE;
+}
+
+ERROR_TYPE FileIn::GetChar(char &c, int &currLine, int &currLineChar)
+{
+    ERROR_TYPE error = ERROR_NONE;
+    
+    RET_IF_ERR(this->PeekChar(c));
+
+    error = AdvanceChar(currLine, currLineChar);
+
+    return error;
+}
+
+ERROR_TYPE FileIn::PeekChar(char &c, int ahead)
+{
+    if (m_currChar + ahead >= m_maxChar)
+    {
+        c = '\0';
+        return ERROR_END_OF_FILE;
+    }
+
+    c = m_fileString[m_currChar + ahead];
 
     return ERROR_NONE;
 }

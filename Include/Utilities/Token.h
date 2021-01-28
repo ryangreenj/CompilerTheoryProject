@@ -2,6 +2,7 @@
 #define _INCL_UTILITIES_TOKEN
 
 #include <string>
+#include <variant>
 
 typedef unsigned int TOKEN_TYPE;
 
@@ -34,17 +35,14 @@ typedef unsigned int TOKEN_TYPE;
 #define T_INTCONST 265
 #define T_DOUBLECONST 266
 
+#define T_EOF 267
+
 
 
 struct Token
 {
     TOKEN_TYPE type;
-    union
-    {
-        std::string stringValue;
-        int intValue;
-        double doubleValue;
-    };
+    std::variant<std::string, int, double> value;
     int line;
     int startChar;
 };

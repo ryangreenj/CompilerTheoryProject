@@ -17,8 +17,9 @@ public:
 
     ERROR_TYPE LoadFile(std::string inFileName = "");
 
-    ERROR_TYPE GetNextChar(char &c, int &currLine, int &currLineChar);
-    ERROR_TYPE PeekNextChar(char &c);
+    ERROR_TYPE AdvanceChar(int &currLine, int &currLineChar);
+    ERROR_TYPE GetChar(char &c, int &currLine, int &currLineChar);
+    ERROR_TYPE PeekChar(char &c, int ahead = 0);
 
 private:
     std::string m_inFileName;
