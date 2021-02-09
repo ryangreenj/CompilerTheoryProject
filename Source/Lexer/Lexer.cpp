@@ -31,7 +31,12 @@ ERROR_TYPE Lexer::GetNextToken(Token *token)
     // Consume all whitespace and comments until an actual symbol in the language
     while (ConsumeWhitespace(nextChar) || ConsumeComment(nextChar));
 
-    if (GetSingleCharToken(nextChar, token))
+    if (TrySingleCharToken(nextChar, token))
+    {
+        return error;
+    }
+
+    if (TryColonTokens(nextChar, token))
     {
         return error;
     }
@@ -39,7 +44,7 @@ ERROR_TYPE Lexer::GetNextToken(Token *token)
     return error;
 }
 
-bool Lexer::GetSingleCharToken(char &currChar, Token *token)
+bool Lexer::TrySingleCharToken(char &currChar, Token *token)
 {
     switch (currChar)
     {
@@ -82,6 +87,158 @@ bool Lexer::GetSingleCharToken(char &currChar, Token *token)
     }
     default: return false;
     }
+}
+
+bool Lexer::TryColonTokens(char &currChar, Token *token)
+{
+    if (currChar == ':')
+    {
+        int currLine = 0, currLineChar = 0;
+        m_fileIn->GetChar(currChar, currLine, currLineChar);
+
+        char nextChar = '\0';
+        m_fileIn->PeekChar(nextChar);
+
+        if (nextChar == '=')
+        {
+            m_fileIn->GetChar(currChar);
+
+            token->type = T_ASSIGN;
+        }
+        else
+        {
+            token->type = T_COLON;
+        }
+
+        token->value = "";
+        token->line = currLine;
+        token->startChar = currLineChar;
+
+        return true;
+    }
+    return false;
+}
+
+bool Lexer::TryLTTokens(char &currChar, Token *token)
+{
+    if (currChar == '<')
+    {
+        int currLine = 0, currLineChar = 0;
+        m_fileIn->GetChar(currChar, currLine, currLineChar);
+
+        char nextChar = '\0';
+        m_fileIn->PeekChar(nextChar);
+
+        if (nextChar == '=')
+        {
+            m_fileIn->GetChar(currChar);
+
+            token->type = T_LESSTHANEQUALTO;
+        }
+        else
+        {
+            token->type = T_LESSTHAN;
+        }
+
+        token->value = "";
+        token->line = currLine;
+        token->startChar = currLineChar;
+
+        return true;
+    }
+    return false;
+}
+
+bool Lexer::TryGTTokens(char &currChar, Token *token)
+{
+    if (currChar == '>')
+    {
+        int currLine = 0, currLineChar = 0;
+        m_fileIn->GetChar(currChar, currLine, currLineChar);
+
+        char nextChar = '\0';
+        m_fileIn->PeekChar(nextChar);
+
+        if (nextChar == '=')
+        {
+            m_fileIn->GetChar(currChar);
+
+            token->type = T_GREATERTHANEQUALTO;
+        }
+        else
+        {
+            token->type = T_GREATERTHAN;
+        }
+
+        token->value = "";
+        token->line = currLine;
+        token->startChar = currLineChar;
+
+        return true;
+    }
+    return false;
+}
+
+bool Lexer::TryEqualsToken(char &currChar, Token *token)
+{
+    if (currChar == '=')
+    {
+        int currLine = 0, currLineChar = 0;
+        m_fileIn->GetChar(currChar, currLine, currLineChar);
+
+        char nextChar = '\0';
+        m_fileIn->PeekChar(nextChar);
+
+        if (nextChar == '=')
+        {
+            m_fileIn->GetChar(currChar);
+
+            token->type = T_EQUALS;
+            token->value = "";
+        }
+        else
+        {
+            token->type = T_UNKNOWN;
+            token->value = currChar;
+        }
+
+        token->line = currLine;
+        token->startChar = currLineChar;
+
+        return true;
+    }
+    return false;
+}
+
+bool Lexer::TryNotEqualsToken(char &currChar, Token *token)
+{
+    if (currChar == '!')
+    {
+        int currLine = 0, currLineChar = 0;
+        m_fileIn->GetChar(currChar, currLine, currLineChar);
+
+        char nextChar = '\0';
+        m_fileIn->PeekChar(nextChar);
+
+        if (nextChar == '=')
+        {
+            m_fileIn->GetChar(currChar);
+
+            token->type = T_NOTEQUALS;
+            token->value = "";
+        }
+        else
+        {
+            token->type = T_UNKNOWN;
+            token->value = currChar;
+        }
+
+        token->line = currLine;
+        token->startChar = currLineChar;
+
+        return true;
+    }
+    return false;
 }
 
 bool Lexer::ConsumeWhitespace(char &currChar)

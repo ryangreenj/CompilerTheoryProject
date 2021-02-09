@@ -36,6 +36,7 @@ typedef unsigned int TOKEN_TYPE;
 #define T_DOUBLECONST 266
 
 #define T_EOF 267
+#define T_UNKNOWN 268
 
 
 

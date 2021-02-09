@@ -44,12 +44,15 @@ ERROR_TYPE FileIn::LoadFile(std::string inFileName)
     return ERROR_NONE;
 }
 
-ERROR_TYPE FileIn::AdvanceChar(int &currLine, int &currLineChar)
+ERROR_TYPE FileIn::AdvanceChar()
 {
     if (m_currChar >= m_maxChar)
     {
         return ERROR_END_OF_FILE;
     }
+
+    ++m_currChar;
+    ++m_currLineChar;
 
     if (m_fileString[m_currChar] == '\n')
     {
@@ -57,12 +60,28 @@ ERROR_TYPE FileIn::AdvanceChar(int &currLine, int &currLineChar)
         m_currLineChar = 0;
     }
 
-    ++m_currChar;
+    return ERROR_NONE;
+}
+
+ERROR_TYPE FileIn::AdvanceChar(int &currLine, int &currLineChar)
+{
+    RET_IF_ERR(AdvanceChar());
 
     currLine = m_currLine;
-    currLineChar = m_currLineChar++;
+    currLineChar = m_currLineChar;
 
     return ERROR_NONE;
+}
+
+ERROR_TYPE FileIn::GetChar(char &c)
+{
+    ERROR_TYPE error = ERROR_NONE;
+
+    RET_IF_ERR(this->PeekChar(c));
+
+    error = AdvanceChar();
+
+    return error;
 }
 
 ERROR_TYPE FileIn::GetChar(char &c, int &currLine, int &currLineChar)

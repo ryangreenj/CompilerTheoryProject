@@ -18,7 +18,12 @@ public:
 private:
     FileIn *m_fileIn;
 
-    bool GetSingleCharToken(char &currChar, Token *token);
+    bool TrySingleCharToken(char &currChar, Token *token);
+    bool TryColonTokens(char &currChar, Token *token);
+    bool TryLTTokens(char &currChar, Token *token);
+    bool TryGTTokens(char &currChar, Token *token);
+    bool TryEqualsToken(char &currChar, Token *token);
+    bool TryNotEqualsToken(char &currChar, Token *token);
 
     bool ConsumeWhitespace(char &currChar);
     bool ConsumeComment(char &currChar);

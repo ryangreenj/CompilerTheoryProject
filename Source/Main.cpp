@@ -15,19 +15,6 @@ int main(int argc, char* args[])
 
     if (argc == 2)
     {
-        /*inFile = new FileIn(args[1]);
-
-        RET_IF_ERR(inFile->LoadFile());
-
-        char c;
-        int currLine, currChar;
-        while (inFile->GetChar(c, currLine, currChar) != ERROR_END_OF_FILE)
-        {
-            std::cout << c;
-        }
-
-        delete inFile;*/
-
         Token *t = new Token();
 
         Lexer l(args[1]);
