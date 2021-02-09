@@ -28,10 +28,10 @@ private:
     std::string m_fileString;
 
     int m_maxChar;
-    int m_currChar;
+    int m_currChar = 0;
 
-    int m_currLine;
-    int m_currLineChar;
+    int m_currLine = 1;
+    int m_currLineChar = 1;
 };
 
 #endif

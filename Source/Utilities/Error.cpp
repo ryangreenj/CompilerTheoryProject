@@ -1,4 +1,4 @@
-#include "Utilities\Error.h"
+#include "Utilities/Error.h"
 
 #include <tuple>
 #include <vector>
@@ -16,4 +16,14 @@ void Error::ReportError(ERROR_TYPE error, std::string message)
 void Error::ReportWarning(ERROR_TYPE error, std::string message)
 {
     WarningList.push_back(ErrorTuple(error, message));
+}
+
+bool Error::HasError()
+{
+    return ErrorList.size();
+}
+
+bool Error::HasWarning()
+{
+    return WarningList.size();
 }

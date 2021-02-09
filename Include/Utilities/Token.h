@@ -22,6 +22,7 @@ typedef unsigned int TOKEN_TYPE;
 #define T_COMMA ','
 #define T_AND '&'
 #define T_OR '|'
+#define T_PERIOD '.'
 
 #define T_LESSTHAN 257
 #define T_GREATERTHAN 258

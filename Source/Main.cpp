@@ -11,7 +11,6 @@ int main(int argc, char* args[])
     std::cout << "Hello Compiler\n";
 
     int error = ERROR_NONE;
-    FileIn* inFile;
 
     if (argc == 2)
     {

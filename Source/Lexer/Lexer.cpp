@@ -1,5 +1,9 @@
 #include "Lexer/Lexer.h"
 
+#include <sstream>
+
+#define RET_IF_SUCCESS(func) if(func) { return error; }
+
 Lexer::Lexer() : Lexer("") {}
 
 Lexer::Lexer(std::string inFileName)
@@ -22,7 +26,7 @@ Lexer::~Lexer()
 
 ERROR_TYPE Lexer::GetNextToken(Token *token)
 {
-    int error = ERROR_NONE;
+    ERROR_TYPE error = ERROR_NONE;
 
     // Peek next char, then switch it
     char nextChar = '\0';
@@ -31,20 +35,24 @@ ERROR_TYPE Lexer::GetNextToken(Token *token)
     // Consume all whitespace and comments until an actual symbol in the language
     while (ConsumeWhitespace(nextChar) || ConsumeComment(nextChar));
 
-    if (TrySingleCharToken(nextChar, token))
-    {
-        return error;
-    }
+    // Try all token types, returning if they work
+    RET_IF_SUCCESS(TrySingleCharToken(error, nextChar, token));
+    RET_IF_SUCCESS(TryColonTokens(error, nextChar, token));
+    RET_IF_SUCCESS(TryLTTokens(error, nextChar, token));
+    RET_IF_SUCCESS(TryGTTokens(error, nextChar, token));
+    RET_IF_SUCCESS(TryEqualsToken(error, nextChar, token));
+    RET_IF_SUCCESS(TryNotEqualsToken(error, nextChar, token));
+    RET_IF_SUCCESS(TryIdentifierToken(error, nextChar, token));
+    RET_IF_SUCCESS(TryStringConstToken(error, nextChar, token));
+    RET_IF_SUCCESS(TryNumericConstToken(error, nextChar, token));
 
-    if (TryColonTokens(nextChar, token))
-    {
-        return error;
-    }
+    // If we get here, we aren't expecting this character.
+    HandleUnexpectedToken(error, nextChar, token);
 
     return error;
 }
 
-bool Lexer::TrySingleCharToken(char &currChar, Token *token)
+bool Lexer::TrySingleCharToken(ERROR_TYPE &error, char &currChar, Token *token)
 {
     switch (currChar)
     {
@@ -62,6 +70,7 @@ bool Lexer::TrySingleCharToken(char &currChar, Token *token)
     case T_COMMA:
     case T_AND:
     case T_OR:
+    case T_PERIOD:
     {
         int currLine = 0, currLineChar = 0;
         m_fileIn->GetChar(currChar, currLine, currLineChar);
@@ -89,7 +98,7 @@ bool Lexer::TrySingleCharToken(char &currChar, Token *token)
     }
 }
 
-bool Lexer::TryColonTokens(char &currChar, Token *token)
+bool Lexer::TryColonTokens(ERROR_TYPE &error, char &currChar, Token *token)
 {
     if (currChar == ':')
     {
@@ -119,7 +128,7 @@ bool Lexer::TryColonTokens(char &currChar, Token *token)
     return false;
 }
 
-bool Lexer::TryLTTokens(char &currChar, Token *token)
+bool Lexer::TryLTTokens(ERROR_TYPE &error, char &currChar, Token *token)
 {
     if (currChar == '<')
     {
@@ -149,7 +158,7 @@ bool Lexer::TryLTTokens(char &currChar, Token *token)
     return false;
 }
 
-bool Lexer::TryGTTokens(char &currChar, Token *token)
+bool Lexer::TryGTTokens(ERROR_TYPE &error, char &currChar, Token *token)
 {
     if (currChar == '>')
     {
@@ -179,7 +188,7 @@ bool Lexer::TryGTTokens(char &currChar, Token *token)
     return false;
 }
 
-bool Lexer::TryEqualsToken(char &currChar, Token *token)
+bool Lexer::TryEqualsToken(ERROR_TYPE &error, char &currChar, Token *token)
 {
     if (currChar == '=')
     {
@@ -195,22 +204,20 @@ bool Lexer::TryEqualsToken(char &currChar, Token *token)
 
             token->type = T_EQUALS;
             token->value = "";
+            token->line = currLine;
+            token->startChar = currLineChar;
         }
         else
         {
-            token->type = T_UNKNOWN;
-            token->value = currChar;
+            HandleUnexpectedToken(error, nextChar, token);
         }
-
-        token->line = currLine;
-        token->startChar = currLineChar;
 
         return true;
     }
     return false;
 }
 
-bool Lexer::TryNotEqualsToken(char &currChar, Token *token)
+bool Lexer::TryNotEqualsToken(ERROR_TYPE &error, char &currChar, Token *token)
 {
     if (currChar == '!')
     {
@@ -224,21 +231,148 @@ bool Lexer::TryNotEqualsToken(char &currChar, Token *token)
         {
             m_fileIn->GetChar(currChar);
 
-            token->type = T_NOTEQUALS;
+            token->type = T_EQUALS;
             token->value = "";
+            token->line = currLine;
+            token->startChar = currLineChar;
         }
         else
         {
-            token->type = T_UNKNOWN;
-            token->value = currChar;
+            HandleUnexpectedToken(error, nextChar, token);
         }
 
+        return true;
+    }
+    return false;
+}
+
+bool Lexer::TryIdentifierToken(ERROR_TYPE &error, char &currChar, Token *token)
+{
+    // Identifiers start with a letter
+    if (isalpha(currChar))
+    {
+        std::string tokenName = "";
+
+        int currLine = 0, currLineChar = 0;
+        m_fileIn->GetChar(currChar, currLine, currLineChar);
+        tokenName += currChar;
+
+        char nextChar = '\0';
+        m_fileIn->PeekChar(nextChar);
+
+        while (isalnum(nextChar) || nextChar == '_')
+        {
+            m_fileIn->GetChar(currChar);
+            tokenName += currChar;
+            m_fileIn->PeekChar(nextChar);
+        }
+
+        token->type = T_IDENTIFIER;
+        token->value = tokenName;
         token->line = currLine;
         token->startChar = currLineChar;
 
         return true;
     }
     return false;
+}
+
+bool Lexer::TryStringConstToken(ERROR_TYPE &error, char &currChar, Token *token)
+{
+    if (currChar == '"')
+    {
+        // Handle escape characters?
+        std::string value = "";
+
+        int currLine = 0, currLineChar = 0;
+        m_fileIn->GetChar(currChar, currLine, currLineChar);
+
+        char nextChar = '\0';
+        m_fileIn->PeekChar(nextChar);
+
+        while (nextChar != '"')
+        {
+            m_fileIn->GetChar(currChar);
+            value += currChar;
+            m_fileIn->PeekChar(nextChar);
+        }
+
+        token->type = T_STRINGCONST;
+        token->value = value;
+        token->line = currLine;
+        token->startChar = currLineChar;
+        return true;
+    }
+    return false;
+}
+
+bool Lexer::TryNumericConstToken(ERROR_TYPE &error, char &currChar, Token *token)
+{
+    if (isdigit(currChar))
+    {
+        std::string value = "";
+
+        int currLine = 0, currLineChar = 0;
+        m_fileIn->GetChar(currChar, currLine, currLineChar);
+        value += currChar;
+
+        token->type = T_INTCONST;
+        token->line = currLine;
+        token->startChar = currLineChar;
+
+        char nextChar = '\0';
+        m_fileIn->PeekChar(nextChar);
+
+        while (isdigit(nextChar))
+        {
+            m_fileIn->GetChar(currChar);
+            value += currChar;
+            m_fileIn->PeekChar(nextChar);
+        }
+
+        if (nextChar == '.')
+        {
+            m_fileIn->GetChar(currChar);
+            value += currChar;
+            m_fileIn->PeekChar(nextChar);
+
+            token->type = T_DOUBLECONST;
+        }
+        else
+        {
+            token->value = stoi(value);
+            return true;
+        }
+
+        while (isdigit(nextChar))
+        {
+            m_fileIn->GetChar(currChar);
+            value += currChar;
+            m_fileIn->PeekChar(nextChar);
+        }
+
+        token->value = stod(value);
+    }
+    return false;
+}
+
+bool Lexer::HandleUnexpectedToken(ERROR_TYPE &error, char &currChar, Token *token)
+{
+    error = ERROR_UNEXPECTED_CHARACTER;
+    int currLine = 0, currLineChar = 0;
+    m_fileIn->GetChar(currChar, currLine, currLineChar);
+
+    token->type = T_UNKNOWN;
+    token->value = currChar;
+    token->line = currLine;
+    token->startChar = currLineChar;
+
+    std::ostringstream errorMessage;
+    errorMessage << "Unexcepted character '" << currChar << "' at Line " << currLine << " Pos " << currLineChar;
+
+    Error::ReportError(error, errorMessage.str());
+
+    return true;
 }
 
 bool Lexer::ConsumeWhitespace(char &currChar)

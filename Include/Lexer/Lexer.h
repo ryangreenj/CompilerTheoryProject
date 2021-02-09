@@ -18,12 +18,17 @@ public:
 private:
     FileIn *m_fileIn;
 
-    bool TrySingleCharToken(char &currChar, Token *token);
-    bool TryColonTokens(char &currChar, Token *token);
-    bool TryLTTokens(char &currChar, Token *token);
-    bool TryGTTokens(char &currChar, Token *token);
-    bool TryEqualsToken(char &currChar, Token *token);
-    bool TryNotEqualsToken(char &currChar, Token *token);
+    bool TrySingleCharToken(ERROR_TYPE &error, char &currChar, Token *token);
+    bool TryColonTokens(ERROR_TYPE &error, char &currChar, Token *token);
+    bool TryLTTokens(ERROR_TYPE &error, char &currChar, Token *token);
+    bool TryGTTokens(ERROR_TYPE &error, char &currChar, Token *token);
+    bool TryEqualsToken(ERROR_TYPE &error, char &currChar, Token *token);
+    bool TryNotEqualsToken(ERROR_TYPE &error, char &currChar, Token *token);
+    bool TryIdentifierToken(ERROR_TYPE &error, char &currChar, Token *token);
+    bool TryStringConstToken(ERROR_TYPE &error, char &currChar, Token *token);
+    bool TryNumericConstToken(ERROR_TYPE &error, char &currChar, Token *token);
+
+    bool HandleUnexpectedToken(ERROR_TYPE &error, char &currChar, Token *token);
 
     bool ConsumeWhitespace(char &currChar);
     bool ConsumeComment(char &currChar);

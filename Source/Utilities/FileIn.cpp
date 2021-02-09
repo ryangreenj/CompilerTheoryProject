@@ -38,8 +38,8 @@ ERROR_TYPE FileIn::LoadFile(std::string inFileName)
     inFile.close();
     
     m_currChar = 0;
-    m_currLine = 0;
-    m_currLineChar = 0;
+    m_currLine = 1;
+    m_currLineChar = 1;
 
     return ERROR_NONE;
 }
@@ -65,10 +65,10 @@ ERROR_TYPE FileIn::AdvanceChar()
 
 ERROR_TYPE FileIn::AdvanceChar(int &currLine, int &currLineChar)
 {
-    RET_IF_ERR(AdvanceChar());
-
     currLine = m_currLine;
     currLineChar = m_currLineChar;
+
+    RET_IF_ERR(AdvanceChar());
 
     return ERROR_NONE;
 }
