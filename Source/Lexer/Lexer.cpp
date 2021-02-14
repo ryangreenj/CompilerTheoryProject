@@ -25,7 +25,7 @@ Lexer::~Lexer()
     delete m_fileIn;
 }
 
-ERROR_TYPE Lexer::GetNextToken(Token *token)
+ERROR_TYPE Lexer::GetNextToken(Token *&token)
 {
     ERROR_TYPE error = ERROR_NONE;
 

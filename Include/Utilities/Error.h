@@ -9,6 +9,10 @@ typedef unsigned int ERROR_TYPE;
 #define ERROR_FAIL_TO_OPEN 1
 #define ERROR_END_OF_FILE 2
 #define ERROR_UNEXPECTED_CHARACTER 3
+#define ERROR_NO_PROGRAM_END 4
+#define ERROR_NO_OCCURRENCE 5
+#define ERROR_INVALID_HEADER 6
+#define ERROR_INVALID_BODY 6
 
 #include <string>
 

@@ -1,10 +1,11 @@
 #include <iostream>
 #include <string>
 
+#include "Lexer/Lexer.h"
+#include "Parser/Parser.h"
 #include "Utilities/Error.h"
 #include "Utilities/FileIn.h"
 #include "Utilities/Token.h"
-#include "Lexer/Lexer.h"
 
 int main(int argc, char* args[])
 {
@@ -14,15 +15,11 @@ int main(int argc, char* args[])
 
     if (argc == 2)
     {
-        Token *t = new Token();
+        Lexer *l = new Lexer(args[1]);
+        Parser *p = new Parser(l);
+        p->Parse();
 
-        Lexer l(args[1]);
-        while (t->type != T_EOF)
-        {
-            l.GetNextToken(t);
-        }
-
-        std::cout << "Done" << std::get<std::string>(t->value) << std::endl;
+        std::cout << "Done" << std::endl;
     }
 
     return error;

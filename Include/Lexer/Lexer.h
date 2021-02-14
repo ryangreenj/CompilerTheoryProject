@@ -14,7 +14,7 @@ public:
     Lexer(std::string inFileName);
     ~Lexer();
 
-    ERROR_TYPE GetNextToken(Token *token);
+    ERROR_TYPE GetNextToken(Token *&token);
 private:
     FileIn *m_fileIn;
 
