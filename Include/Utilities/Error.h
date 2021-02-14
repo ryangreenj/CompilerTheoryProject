@@ -19,6 +19,12 @@ namespace Error
 
     bool HasError();
     bool HasWarning();
+
+    void ClearAllErrors();
+    void ClearAllWarnings();
+
+    void PrintAllErrors(std::ostream outStream);
+    void PrintAllWarnings(std::ostream outStream);
 }
 
 #endif

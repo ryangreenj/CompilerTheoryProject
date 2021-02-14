@@ -1,5 +1,6 @@
 #include "Lexer/Lexer.h"
 
+#include <algorithm>
 #include <sstream>
 
 #define RET_IF_SUCCESS(func) if(func) { return error; }
@@ -266,6 +267,9 @@ bool Lexer::TryIdentifierToken(ERROR_TYPE &error, char &currChar, Token *token)
             tokenName += currChar;
             m_fileIn->PeekChar(nextChar);
         }
+
+        // Identifiers are case in-sensitive, convert all to lowercase
+        std::transform(tokenName.begin(), tokenName.end(), tokenName.begin(), ::tolower);
 
         token->type = T_IDENTIFIER;
         token->value = tokenName;
