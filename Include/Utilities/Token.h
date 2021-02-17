@@ -49,4 +49,7 @@ struct Token
     int startChar;
 };
 
+typedef Token* TokenP;
+typedef TokenP& TokenPR;
+
 #endif
