@@ -172,7 +172,49 @@ ERROR_TYPE Parser::Statement(TokenPR currToken, ParseNodePR nodeOut, bool requir
     nodeOut = std::make_shared<ParseNode>();
     nodeOut->type = NodeType::STATEMENT;
 
-    return ERROR_NO_OCCURRENCE; // TODO: fill
+    ParseNodeP nextNode = nullptr;
+    TRY_PARSE(AssignmentStatement(currToken, nextNode));
+
+    if (error == ERROR_NO_OCCURRENCE)
+    {
+        nextNode = nullptr;
+        TRY_PARSE(IfStatement(currToken, nextNode));
+
+        if (error == ERROR_NO_OCCURRENCE)
+        {
+            nextNode = nullptr;
+            TRY_PARSE(LoopStatement(currToken, nextNode));
+
+            if (error == ERROR_NO_OCCURRENCE)
+            {
+                nextNode = nullptr;
+                TRY_PARSE(ReturnStatement(currToken, nextNode));
+
+                if (error != ERROR_NONE)
+                {
+                    if (required)
+                    {
+                        return ERROR_INVALID_STATEMENT;
+                    }
+                    else
+                    {
+                        return error;
+                    }
+                }
+            }
+        }
+    }
+
+    // If we get here, a statement was read, currToken should be semicolon.
+    if (currToken->type == T_SEMICOLON)
+    {
+        NEXT_TOKEN;
+        return ERROR_NONE;
+    }
+    else
+    {
+        return ERROR_MISSING_SEMICOLON;
+    }
 }
 
 ERROR_TYPE Parser::ProcedureDeclaration(TokenPR currToken, ParseNodePR nodeOut, bool required)
@@ -481,4 +523,161 @@ ERROR_TYPE Parser::Bound(TokenPR currToken, ParseNodePR nodeOut, bool required)
     }
 
     return required ? ERROR_INVALID_BOUND : ERROR_NO_OCCURRENCE;
+}
+
+ERROR_TYPE Parser::AssignmentStatement(TokenPR currToken, ParseNodePR nodeOut, bool required)
+{
+    ERROR_TYPE error = ERROR_NONE;
+    nodeOut = std::make_shared<ParseNode>();
+    nodeOut->type = NodeType::ASSIGNMENT_STATEMENT;
+
+    ParseNodeP nextNode = nullptr;
+    REQ_PARSE(Destination(currToken, nextNode, required));
+
+    if (currToken->type == T_ASSIGN)
+    {
+        NEXT_TOKEN;
+
+        nextNode = nullptr;
+        REQ_PARSE(Expression(currToken, nextNode, required));
+
+        return error;
+    }
+    else
+    {
+        return ERROR_MISSING_ASSIGN;
+    }
+
+    return ERROR_NO_OCCURRENCE;
+}
+
+ERROR_TYPE Parser::IfStatement(TokenPR currToken, ParseNodePR nodeOut, bool required)
+{
+    ERROR_TYPE error = ERROR_NONE;
+    nodeOut = std::make_shared<ParseNode>();
+    nodeOut->type = NodeType::IF_STATEMENT;
+
+    if (!IS_RESERVED_WORD(currToken, "if"))
+    {
+        return required ? ERROR_INVALID_IF_STATEMENT : ERROR_NO_OCCURRENCE;
+    }
+    NEXT_TOKEN;
+
+    if (currToken->type != T_LPAREN)
+    {
+        return ERROR_MISSING_PAREN;
+    }
+    NEXT_TOKEN;
+
+    ParseNodeP nextNode = nullptr;
+    REQ_PARSE(Expression(currToken, nextNode, true));
+
+    if (currToken->type != T_RPAREN)
+    {
+        return ERROR_MISSING_PAREN;
+    }
+    NEXT_TOKEN;
+
+    if (!IS_RESERVED_WORD(currToken, "then"))
+    {
+        return ERROR_INVALID_IF_STATEMENT;
+    }
+    NEXT_TOKEN;
+
+    ParseNodeP nextNode = nullptr;
+    TRY_PARSE_MULTI(Statement(currToken, nextNode));
+
+    if (IS_RESERVED_WORD(currToken, "else"))
+    {
+        ParseNodeP elseNode = std::make_shared<ParseNode>();
+        elseNode->type = NodeType::SYMBOL;
+        elseNode->token = currToken;
+        nodeOut->children.push_back(elseNode);
+
+        NEXT_TOKEN;
+
+        nextNode = nullptr;
+        TRY_PARSE_MULTI(Statement(currToken, nextNode));
+    }
+
+    if (IS_RESERVED_WORD(currToken, "end"))
+    {
+        NEXT_TOKEN;
+        if (IS_RESERVED_WORD(currToken, "if"))
+        {
+            NEXT_TOKEN;
+            return ERROR_NONE;
+        }
+    }
+
+    return ERROR_INVALID_IF_STATEMENT;
+}
+
+ERROR_TYPE Parser::LoopStatement(TokenPR currToken, ParseNodePR nodeOut, bool required)
+{
+    ERROR_TYPE error = ERROR_NONE;
+    nodeOut = std::make_shared<ParseNode>();
+    nodeOut->type = NodeType::LOOP_STATEMENT;
+
+    if (!IS_RESERVED_WORD(currToken, "for"))
+    {
+        return required ? ERROR_INVALID_IF_STATEMENT : ERROR_NO_OCCURRENCE;
+    }
+    NEXT_TOKEN;
+
+    if (currToken->type != T_LPAREN)
+    {
+        return ERROR_MISSING_PAREN;
+    }
+    NEXT_TOKEN;
+
+    ParseNodeP nextNode = nullptr;
+    REQ_PARSE(AssignmentStatement(currToken, nextNode, true));
+
+    if (currToken->type != T_SEMICOLON)
+    {
+        return ERROR_MISSING_SEMICOLON;
+    }
+    NEXT_TOKEN;
+
+    nextNode = nullptr;
+    REQ_PARSE(Expression(currToken, nextNode, true));
+
+    if (currToken->type != T_RPAREN)
+    {
+        return ERROR_MISSING_PAREN;
+    }
+    NEXT_TOKEN;
+
+    nextNode = nullptr;
+    TRY_PARSE_MULTI(Statement(currToken, nextNode));
+
+    if (IS_RESERVED_WORD(currToken, "end"))
+    {
+        NEXT_TOKEN;
+        if (IS_RESERVED_WORD(currToken, "for"))
+        {
+            NEXT_TOKEN;
+            return ERROR_NONE;
+        }
+    }
+
+    return ERROR_INVALID_LOOP_STATEMENT;
+}
+
+ERROR_TYPE Parser::ReturnStatement(TokenPR currToken, ParseNodePR nodeOut, bool required)
+{
+    ERROR_TYPE error = ERROR_NONE;
+    nodeOut = std::make_shared<ParseNode>();
+    nodeOut->type = NodeType::RETURN_STATEMENT;
+
+    if (!IS_RESERVED_WORD(currToken, "return"))
+    {
+        return required ? ERROR_INVALID_IF_STATEMENT : ERROR_NO_OCCURRENCE;
+    }
+
+    ParseNodeP nextNode = nullptr;
+    REQ_PARSE(Expression(currToken, nextNode, true));
+
+    return ERROR_NONE;
 }
