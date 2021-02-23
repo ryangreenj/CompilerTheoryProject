@@ -53,7 +53,7 @@ ERROR_TYPE Parser::ProgramHeader(TokenPR currToken, ParseNodePR nodeOut, bool re
 
     if (!IS_RESERVED_WORD(currToken, "program"))
     {
-        return ERROR_INVALID_HEADER;
+        return ERROR_INVALID_PROGRAM_HEADER;
     }
 
     NEXT_TOKEN;
@@ -62,7 +62,7 @@ ERROR_TYPE Parser::ProgramHeader(TokenPR currToken, ParseNodePR nodeOut, bool re
 
     if (!IS_RESERVED_WORD(currToken, "is"))
     {
-        return ERROR_INVALID_HEADER;
+        return ERROR_INVALID_PROGRAM_HEADER;
     }
 
     NEXT_TOKEN;
@@ -80,7 +80,7 @@ ERROR_TYPE Parser::ProgramBody(TokenPR currToken, ParseNodePR nodeOut, bool requ
 
     if (!IS_RESERVED_WORD(currToken, "begin"))
     {
-        return ERROR_INVALID_BODY;
+        return ERROR_INVALID_PROGRAM_BODY;
     }
 
     NEXT_TOKEN;
@@ -90,13 +90,13 @@ ERROR_TYPE Parser::ProgramBody(TokenPR currToken, ParseNodePR nodeOut, bool requ
 
     if (!IS_RESERVED_WORD(currToken, "end"))
     {
-        return ERROR_INVALID_BODY;
+        return ERROR_INVALID_PROGRAM_BODY;
     }
 
     NEXT_TOKEN;
     if (!IS_RESERVED_WORD(currToken, "program"))
     {
-        return ERROR_INVALID_BODY;
+        return ERROR_INVALID_PROGRAM_BODY;
     }
 
     NEXT_TOKEN;
@@ -222,6 +222,8 @@ ERROR_TYPE Parser::ProcedureDeclaration(TokenPR currToken, ParseNodePR nodeOut, 
 
     nextNode = nullptr;
     REQ_PARSE(ProcedureBody(currToken, nextNode, true));
+
+    return required ? ERROR_INVALID_PROCEDURE_DECLARATION : ERROR_NO_OCCURRENCE;
 }
 
 ERROR_TYPE Parser::VariableDeclaration(TokenPR currToken, ParseNodePR nodeOut, bool required)
@@ -329,7 +331,7 @@ ERROR_TYPE Parser::ProcedureHeader(TokenPR currToken, ParseNodePR nodeOut, bool 
         }
         return ERROR_MISSING_COLON;
     }
-    return ERROR_NO_OCCURRENCE;
+    return required ? ERROR_INVALID_PROCEDURE_HEADER : ERROR_NO_OCCURRENCE;
 }
 
 ERROR_TYPE Parser::ProcedureBody(TokenPR currToken, ParseNodePR nodeOut, bool required)
@@ -343,7 +345,7 @@ ERROR_TYPE Parser::ProcedureBody(TokenPR currToken, ParseNodePR nodeOut, bool re
 
     if (!IS_RESERVED_WORD(currToken, "begin"))
     {
-        return ERROR_INVALID_BODY;
+        return ERROR_INVALID_PROCEDURE_BODY;
     }
 
     NEXT_TOKEN;
@@ -353,13 +355,13 @@ ERROR_TYPE Parser::ProcedureBody(TokenPR currToken, ParseNodePR nodeOut, bool re
 
     if (!IS_RESERVED_WORD(currToken, "end"))
     {
-        return ERROR_INVALID_BODY;
+        return ERROR_INVALID_PROCEDURE_BODY;
     }
 
     NEXT_TOKEN;
     if (!IS_RESERVED_WORD(currToken, "procedure"))
     {
-        return ERROR_INVALID_BODY;
+        return ERROR_INVALID_PROCEDURE_BODY;
     }
 
     NEXT_TOKEN;
@@ -545,7 +547,7 @@ ERROR_TYPE Parser::IfStatement(TokenPR currToken, ParseNodePR nodeOut, bool requ
     }
     NEXT_TOKEN;
 
-    ParseNodeP nextNode = nullptr;
+    nextNode = nullptr;
     TRY_PARSE_MULTI(Statement(currToken, nextNode));
 
     if (IS_RESERVED_WORD(currToken, "else"))
@@ -674,7 +676,80 @@ ERROR_TYPE Parser::Destination(TokenPR currToken, ParseNodePR nodeOut, bool requ
     nodeOut = std::make_shared<ParseNode>();
     nodeOut->type = NodeType::DESTINATION;
 
-    return required ? ERROR_INVALID_DESTINATION : ERROR_NO_OCCURRENCE;
+    ParseNodeP nextNode = nullptr;
+    REQ_PARSE(Identifier(currToken, nextNode, required));
+
+    if (currToken->type == T_LSQBRACKET)
+    {
+        NEXT_TOKEN;
+
+        nextNode = nullptr;
+        REQ_PARSE(Expression(currToken, nextNode, true));
+
+        if (currToken->type == T_RSQBRACKET)
+        {
+            NEXT_TOKEN;
+            return ERROR_NONE;
+        }
+        return ERROR_MISSING_BRACKET;
+    }
+
+    return ERROR_NONE;
+}
+
+ERROR_TYPE Parser::Expression(TokenPR currToken, ParseNodePR nodeOut, bool required)
+{
+    ERROR_TYPE error = ERROR_NONE;
+    nodeOut = std::make_shared<ParseNode>();
+    nodeOut->type = NodeType::EXPRESSION;
+
+    // TODO: FILL
+
+    return required ? ERROR_INVALID_EXPRESSION : ERROR_NO_OCCURRENCE;
+}
+
+ERROR_TYPE Parser::ArithOp(TokenPR currToken, ParseNodePR nodeOut, bool required)
+{
+    ERROR_TYPE error = ERROR_NONE;
+    nodeOut = std::make_shared<ParseNode>();
+    nodeOut->type = NodeType::ARITH_OP;
+
+    // TODO: FILL
+
+    return required ? ERROR_INVALID_ARITH_OP : ERROR_NO_OCCURRENCE;
+}
+
+ERROR_TYPE Parser::Relation(TokenPR currToken, ParseNodePR nodeOut, bool required)
+{
+    ERROR_TYPE error = ERROR_NONE;
+    nodeOut = std::make_shared<ParseNode>();
+    nodeOut->type = NodeType::RELATION;
+
+    // TODO: FILL
+
+    return required ? ERROR_INVALID_RELATION : ERROR_NO_OCCURRENCE;
+}
+
+ERROR_TYPE Parser::Term(TokenPR currToken, ParseNodePR nodeOut, bool required)
+{
+    ERROR_TYPE error = ERROR_NONE;
+    nodeOut = std::make_shared<ParseNode>();
+    nodeOut->type = NodeType::TERM;
+
+    // TODO: FILL
+
+    return required ? ERROR_INVALID_TERM : ERROR_NO_OCCURRENCE;
+}
+
+ERROR_TYPE Parser::Factor(TokenPR currToken, ParseNodePR nodeOut, bool required)
+{
+    ERROR_TYPE error = ERROR_NONE;
+    nodeOut = std::make_shared<ParseNode>();
+    nodeOut->type = NodeType::FACTOR;
+
+    // TODO: FILL
+
+    return required ? ERROR_INVALID_FACTOR : ERROR_NO_OCCURRENCE;
 }
 
 ERROR_TYPE Parser::ProcedureCallOrName(TokenPR currToken, ParseNodePR nodeOut, bool required)
@@ -687,7 +762,7 @@ ERROR_TYPE Parser::ProcedureCallOrName(TokenPR currToken, ParseNodePR nodeOut, b
 
     if (currToken->type == T_LPAREN) // THIS IS A PROCEDURE CALL
     {
-        nodeOut->type == NodeType::PROCEDURE_CALL;
+        nodeOut->type = NodeType::PROCEDURE_CALL;
         NEXT_TOKEN;
 
         nextNode = nullptr;
@@ -712,6 +787,7 @@ ERROR_TYPE Parser::ProcedureCallOrName(TokenPR currToken, ParseNodePR nodeOut, b
 
             if (currToken->type == T_RSQBRACKET)
             {
+                NEXT_TOKEN;
                 return ERROR_NONE;
             }
             return ERROR_MISSING_BRACKET;

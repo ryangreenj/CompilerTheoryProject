@@ -31,7 +31,7 @@ ERROR_TYPE FileIn::LoadFile(std::string inFileName)
     }
 
     inFile.seekg(0, std::ios::end);
-    m_fileString.resize(m_maxChar = inFile.tellg());
+    m_fileString.resize(m_maxChar = (int) inFile.tellg());
     inFile.seekg(0, std::ios::beg);
     inFile.read(&m_fileString[0], m_fileString.size());
 

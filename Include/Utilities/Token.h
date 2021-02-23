@@ -43,10 +43,10 @@ typedef unsigned int TOKEN_TYPE;
 
 struct Token
 {
-    TOKEN_TYPE type;
+    TOKEN_TYPE type = T_UNKNOWN;
     std::variant<std::string, int, double> value;
-    int line;
-    int startChar;
+    int line = 0;
+    int startChar = 0;
 };
 
 typedef Token* TokenP;
