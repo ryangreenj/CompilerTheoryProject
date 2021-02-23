@@ -57,15 +57,9 @@ ERROR_TYPE Parser::ProgramHeader(TokenPR currToken, ParseNodePR nodeOut, bool re
     }
 
     NEXT_TOKEN;
-    if (currToken->type == T_IDENTIFIER)
-    {
-        ParseNodeP progNameNode = std::make_shared<ParseNode>();
-        progNameNode->type = NodeType::IDENTIFIER;
-        progNameNode->token = currToken;
-        nodeOut->children.push_back(progNameNode);
-    }
+    ParseNodeP nextNode = nullptr;
+    REQ_PARSE(Identifier(currToken, nodeOut, true));
 
-    NEXT_TOKEN;
     if (!IS_RESERVED_WORD(currToken, "is"))
     {
         return ERROR_INVALID_HEADER;
@@ -240,40 +234,33 @@ ERROR_TYPE Parser::VariableDeclaration(TokenPR currToken, ParseNodePR nodeOut, b
     {
         NEXT_TOKEN;
 
-        if (currToken->type == T_IDENTIFIER)
-        {
-            ParseNodeP variableNameNode = std::make_shared<ParseNode>();
-            variableNameNode->type = NodeType::IDENTIFIER;
-            variableNameNode->token = currToken;
-            nodeOut->children.push_back(variableNameNode);
+        ParseNodeP nextNode = nullptr;
+        REQ_PARSE(Identifier(currToken, nodeOut, true));
 
+        if (currToken->type == T_COLON)
+        {
             NEXT_TOKEN;
-            if (currToken->type == T_COLON)
+
+            nextNode = nullptr;
+            REQ_PARSE(TypeMark(currToken, nextNode, true));
+
+            if (currToken->type == T_LSQBRACKET)
             {
                 NEXT_TOKEN;
 
-                ParseNodeP nextNode = nullptr;
-                REQ_PARSE(TypeMark(currToken, nextNode, true));
+                nextNode = nullptr;
+                REQ_PARSE(Bound(currToken, nextNode, true));
 
-                if (currToken->type == T_LSQBRACKET)
+                if (currToken->type == T_RSQBRACKET)
                 {
                     NEXT_TOKEN;
-
-                    nextNode = nullptr;
-                    REQ_PARSE(Bound(currToken, nextNode, true));
-
-                    if (currToken->type == T_RSQBRACKET)
-                    {
-                        NEXT_TOKEN;
-                        return ERROR_NONE;
-                    }
-                    return ERROR_MISSING_BRACKET;
+                    return ERROR_NONE;
                 }
-                return ERROR_NONE;
+                return ERROR_MISSING_BRACKET;
             }
-            return ERROR_MISSING_COLON;
+            return ERROR_NONE;
         }
-        return ERROR_MISSING_IDENTIFIER;
+        return ERROR_MISSING_COLON;
     }
 
     return required ? ERROR_INVALID_VARIABLE_DECLARATION : ERROR_NO_OCCURRENCE;
@@ -289,25 +276,18 @@ ERROR_TYPE Parser::TypeDeclaration(TokenPR currToken, ParseNodePR nodeOut, bool 
     {
         NEXT_TOKEN;
 
-        if (currToken->type == T_IDENTIFIER)
+        ParseNodeP nextNode = nullptr;
+        REQ_PARSE(Identifier(currToken, nextNode, true));
+
+        if (IS_RESERVED_WORD(currToken, "is"))
         {
-            ParseNodeP typeNameNode = std::make_shared<ParseNode>();
-            typeNameNode->type = NodeType::IDENTIFIER;
-            typeNameNode->token = currToken;
-            nodeOut->children.push_back(typeNameNode);
-
             NEXT_TOKEN;
-            if (IS_RESERVED_WORD(currToken, "is"))
-            {
-                NEXT_TOKEN;
-                ParseNodeP nextNode = nullptr;
-                REQ_PARSE(TypeMark(currToken, nextNode, true));
+            nextNode = nullptr;
+            REQ_PARSE(TypeMark(currToken, nextNode, true));
 
-                return ERROR_NONE;
-            }
-            return ERROR_INVALID_TYPE_DECLARATION;
+            return ERROR_NONE;
         }
-        return ERROR_MISSING_IDENTIFIER;
+        return ERROR_INVALID_TYPE_DECLARATION;
     }
 
     return required ? ERROR_INVALID_TYPE_DECLARATION : ERROR_NO_OCCURRENCE;
@@ -322,37 +302,32 @@ ERROR_TYPE Parser::ProcedureHeader(TokenPR currToken, ParseNodePR nodeOut, bool 
     if (IS_RESERVED_WORD(currToken, "procedure"))
     {
         NEXT_TOKEN;
-        if (currToken->type == T_IDENTIFIER)
+
+        ParseNodeP nextNode = nullptr;
+        REQ_PARSE(Identifier(currToken, nextNode, true));
+
+        if (currToken->type == T_COLON)
         {
-            ParseNodeP procNameNode = std::make_shared<ParseNode>();
-            procNameNode->type = NodeType::IDENTIFIER;
-            procNameNode->token = currToken;
-            nodeOut->children.push_back(procNameNode);
             NEXT_TOKEN;
-            if (currToken->type == T_COLON)
+            ParseNodeP nextNode = nullptr;
+            REQ_PARSE(TypeMark(currToken, nextNode, true));
+
+            if (currToken->type == T_LPAREN)
             {
                 NEXT_TOKEN;
-                ParseNodeP nextNode = nullptr;
-                REQ_PARSE(TypeMark(currToken, nextNode, true));
+                nextNode = nullptr;
+                REQ_PARSE(ParameterList(currToken, nextNode, true));
 
-                if (currToken->type == T_LPAREN)
+                if (currToken->type == T_RPAREN)
                 {
                     NEXT_TOKEN;
-                    nextNode = nullptr;
-                    REQ_PARSE(ParameterList(currToken, nextNode, true));
-
-                    if (currToken->type == T_RPAREN)
-                    {
-                        NEXT_TOKEN;
-                        return ERROR_NONE;
-                    }
-                    return ERROR_MISSING_PAREN;
+                    return ERROR_NONE;
                 }
                 return ERROR_MISSING_PAREN;
             }
-            return ERROR_MISSING_COLON;
+            return ERROR_MISSING_PAREN;
         }
-        return ERROR_MISSING_IDENTIFIER;
+        return ERROR_MISSING_COLON;
     }
     return ERROR_NO_OCCURRENCE;
 }
@@ -425,21 +400,10 @@ ERROR_TYPE Parser::TypeMark(TokenPR currToken, ParseNodePR nodeOut, bool require
 
             do
             {
-                if (currToken->type == T_IDENTIFIER)
-                {
-                    ParseNodeP identifierNode = std::make_shared<ParseNode>();
-                    identifierNode->type = NodeType::IDENTIFIER;
-                    identifierNode->token = currToken;
-                    nodeOut->children.push_back(identifierNode);
+                ParseNodeP nextNode = nullptr;
+                REQ_PARSE(Identifier(currToken, nextNode, true));
 
-                    endOfList = true;
-                }
-                else
-                {
-                    return ERROR_MISSING_IDENTIFIER;
-                }
-
-                NEXT_TOKEN;
+                endOfList = true;
 
                 if (currToken->type == T_COMMA)
                 {
@@ -461,12 +425,9 @@ ERROR_TYPE Parser::TypeMark(TokenPR currToken, ParseNodePR nodeOut, bool require
 
     if (currToken->type == T_IDENTIFIER)
     {
-        ParseNodeP identifierNode = std::make_shared<ParseNode>();
-        identifierNode->type = NodeType::IDENTIFIER;
-        identifierNode->token = currToken;
-        nodeOut->children.push_back(identifierNode);
+        ParseNodeP nextNode = nullptr;
+        REQ_PARSE(Identifier(currToken, nextNode, true));
 
-        NEXT_TOKEN;
         return ERROR_NONE;
     }
 
@@ -680,4 +641,131 @@ ERROR_TYPE Parser::ReturnStatement(TokenPR currToken, ParseNodePR nodeOut, bool 
     REQ_PARSE(Expression(currToken, nextNode, true));
 
     return ERROR_NONE;
+}
+
+ERROR_TYPE Parser::ArgumentList(TokenPR currToken, ParseNodePR nodeOut, bool required)
+{
+    ERROR_TYPE error = ERROR_NONE;
+    nodeOut = std::make_shared<ParseNode>();
+    nodeOut->type = NodeType::ARGUMENT_LIST;
+
+    bool done = false;
+
+    do
+    {
+        ParseNodeP nextNode = nullptr;
+        REQ_PARSE(Expression(currToken, nextNode, required));
+
+        done = true;
+
+        if (currToken->type == T_COMMA)
+        {
+            done = false;
+            NEXT_TOKEN;
+        }
+    } while (!done);
+
+    return ERROR_NONE;
+}
+
+ERROR_TYPE Parser::Destination(TokenPR currToken, ParseNodePR nodeOut, bool required)
+{
+    ERROR_TYPE error = ERROR_NONE;
+    nodeOut = std::make_shared<ParseNode>();
+    nodeOut->type = NodeType::DESTINATION;
+
+    return required ? ERROR_INVALID_DESTINATION : ERROR_NO_OCCURRENCE;
+}
+
+ERROR_TYPE Parser::ProcedureCallOrName(TokenPR currToken, ParseNodePR nodeOut, bool required)
+{
+    ERROR_TYPE error = ERROR_NONE;
+    nodeOut = std::make_shared<ParseNode>();
+
+    ParseNodeP nextNode = nullptr;
+    REQ_PARSE(Identifier(currToken, nextNode, required));
+
+    if (currToken->type == T_LPAREN) // THIS IS A PROCEDURE CALL
+    {
+        nodeOut->type == NodeType::PROCEDURE_CALL;
+        NEXT_TOKEN;
+
+        nextNode = nullptr;
+        REQ_PARSE(ArgumentList(currToken, nextNode, true));
+
+        if (currToken->type == T_RPAREN)
+        {
+            return ERROR_NONE;
+        }
+        return ERROR_MISSING_PAREN;
+    }
+    else // ELSE IT'S A NAME
+    {
+        nodeOut->type = NodeType::NAME;
+
+        if (currToken->type == T_LSQBRACKET)
+        {
+            NEXT_TOKEN;
+
+            nextNode = nullptr;
+            REQ_PARSE(Expression(currToken, nextNode, true));
+
+            if (currToken->type == T_RSQBRACKET)
+            {
+                return ERROR_NONE;
+            }
+            return ERROR_MISSING_BRACKET;
+        }
+        return ERROR_NONE;
+    }
+
+    return required ? ERROR_INVALID_PROCEDURE_CALL_OR_NAME : ERROR_NO_OCCURRENCE;
+}
+
+ERROR_TYPE Parser::Number(TokenPR currToken, ParseNodePR nodeOut, bool required)
+{
+    ERROR_TYPE error = ERROR_NONE;
+    nodeOut = std::make_shared<ParseNode>();
+    nodeOut->type = NodeType::NUMBER;
+
+    if ((currToken->type == T_INTCONST) || (currToken->type == T_DOUBLECONST))
+    {
+        nodeOut->token = currToken;
+        NEXT_TOKEN;
+        return ERROR_NONE;
+    }
+
+    return required ? ERROR_INVALID_STRING : ERROR_NO_OCCURRENCE;
+}
+
+ERROR_TYPE Parser::String(TokenPR currToken, ParseNodePR nodeOut, bool required)
+{
+    ERROR_TYPE error = ERROR_NONE;
+    nodeOut = std::make_shared<ParseNode>();
+    nodeOut->type = NodeType::STRING;
+
+    if (currToken->type == T_STRINGCONST)
+    {
+        nodeOut->token = currToken;
+        NEXT_TOKEN;
+        return ERROR_NONE;
+    }
+
+    return required ? ERROR_INVALID_STRING : ERROR_NO_OCCURRENCE;
+}
+
+ERROR_TYPE Parser::Identifier(TokenPR currToken, ParseNodePR nodeOut, bool required)
+{
+    ERROR_TYPE error = ERROR_NONE;
+    nodeOut = std::make_shared<ParseNode>();
+    nodeOut->type = NodeType::IDENTIFIER;
+
+    if (currToken->type == T_IDENTIFIER)
+    {
+        nodeOut->token = currToken;
+        NEXT_TOKEN;
+        return ERROR_NONE;
+    }
+
+    return required ? ERROR_INVALID_IDENTIFIER : ERROR_NO_OCCURRENCE;
 }

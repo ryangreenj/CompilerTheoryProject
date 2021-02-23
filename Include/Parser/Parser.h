@@ -31,18 +31,19 @@ private:
     ERROR_TYPE AssignmentStatement(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE
     ERROR_TYPE IfStatement(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE
     ERROR_TYPE LoopStatement(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE
-    ERROR_TYPE ReturnStatement(TokenPR currToken, ParseNodePR nodeOut, bool required = false);
-    ERROR_TYPE ProcedureCall(TokenPR currToken, ParseNodePR nodeOut, bool required = false);
-    ERROR_TYPE ArgumentList(TokenPR currToken, ParseNodePR nodeOut, bool required = false);
-    ERROR_TYPE Destination(TokenPR currToken, ParseNodePR nodeOut, bool required = false);
+    ERROR_TYPE ReturnStatement(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE
+    ERROR_TYPE ProcedureCallOrName(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // <procedure_call> and <name> both start with identifier...  DONE
+    ERROR_TYPE ArgumentList(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE
+    ERROR_TYPE Destination(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // <destination> is same as <name>...  DONE
     ERROR_TYPE Expression(TokenPR currToken, ParseNodePR nodeOut, bool required = false);
     ERROR_TYPE ArithOp(TokenPR currToken, ParseNodePR nodeOut, bool required = false);
     ERROR_TYPE Relation(TokenPR currToken, ParseNodePR nodeOut, bool required = false);
     ERROR_TYPE Term(TokenPR currToken, ParseNodePR nodeOut, bool required = false);
     ERROR_TYPE Factor(TokenPR currToken, ParseNodePR nodeOut, bool required = false);
-    ERROR_TYPE Name(TokenPR currToken, ParseNodePR nodeOut, bool required = false);
-    ERROR_TYPE Number(TokenPR currToken, ParseNodePR nodeOut, bool required = false);
-    ERROR_TYPE String(TokenPR currToken, ParseNodePR nodeOut, bool required = false);
+    //ERROR_TYPE Name(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // Handle with <procedure_call>, since they both only occur in <factor>
+    ERROR_TYPE Number(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE
+    ERROR_TYPE String(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE
+    ERROR_TYPE Identifier(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE
 };
 
 #endif
