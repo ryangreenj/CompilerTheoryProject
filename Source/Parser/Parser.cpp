@@ -58,7 +58,7 @@ ERROR_TYPE Parser::ProgramHeader(TokenPR currToken, ParseNodePR nodeOut, bool re
 
     NEXT_TOKEN;
     ParseNodeP nextNode = nullptr;
-    REQ_PARSE(Identifier(currToken, nodeOut, true));
+    REQ_PARSE(Identifier(currToken, nextNode, true));
 
     if (!IS_RESERVED_WORD(currToken, "is"))
     {
@@ -167,22 +167,23 @@ ERROR_TYPE Parser::Statement(TokenPR currToken, ParseNodePR nodeOut, bool requir
     nodeOut->type = NodeType::STATEMENT;
 
     ParseNodeP nextNode = nullptr;
-    TRY_PARSE(AssignmentStatement(currToken, nextNode));
+    
+    TRY_PARSE(IfStatement(currToken, nextNode));
 
     if (error == ERROR_NO_OCCURRENCE)
     {
         nextNode = nullptr;
-        TRY_PARSE(IfStatement(currToken, nextNode));
+        TRY_PARSE(LoopStatement(currToken, nextNode));
 
         if (error == ERROR_NO_OCCURRENCE)
         {
             nextNode = nullptr;
-            TRY_PARSE(LoopStatement(currToken, nextNode));
+            TRY_PARSE(ReturnStatement(currToken, nextNode));
 
             if (error == ERROR_NO_OCCURRENCE)
             {
                 nextNode = nullptr;
-                TRY_PARSE(ReturnStatement(currToken, nextNode));
+                TRY_PARSE(AssignmentStatement(currToken, nextNode));
 
                 if (error != ERROR_NONE)
                 {
@@ -237,7 +238,7 @@ ERROR_TYPE Parser::VariableDeclaration(TokenPR currToken, ParseNodePR nodeOut, b
         NEXT_TOKEN;
 
         ParseNodeP nextNode = nullptr;
-        REQ_PARSE(Identifier(currToken, nodeOut, true));
+        REQ_PARSE(Identifier(currToken, nextNode, true));
 
         if (currToken->type == T_COLON)
         {
@@ -703,9 +704,42 @@ ERROR_TYPE Parser::Expression(TokenPR currToken, ParseNodePR nodeOut, bool requi
     nodeOut = std::make_shared<ParseNode>();
     nodeOut->type = NodeType::EXPRESSION;
 
-    // TODO: FILL
+    bool done = true;
+    bool requiredThisPass = required;
 
-    return required ? ERROR_INVALID_EXPRESSION : ERROR_NO_OCCURRENCE;
+    do
+    {
+        if (IS_RESERVED_WORD(currToken, "not"))
+        {
+            ParseNodeP notNode = std::make_shared<ParseNode>();
+            notNode->type = NodeType::SYMBOL;
+            notNode->token = currToken;
+            nodeOut->children.push_back(notNode);
+            
+            requiredThisPass = true;
+
+            NEXT_TOKEN;
+        }
+
+        ParseNodeP nextNode = nullptr;
+        REQ_PARSE(ArithOp(currToken, nextNode, requiredThisPass));
+        done = true;
+
+        if (currToken->type == T_AND || currToken->type == T_OR)
+        {
+            requiredThisPass = true;
+            done = false;
+
+            ParseNodeP opNode = std::make_shared<ParseNode>();
+            opNode->type = NodeType::SYMBOL;
+            opNode->token = currToken;
+            nodeOut->children.push_back(opNode);
+
+            NEXT_TOKEN;
+        }
+    } while (!done);
+
+    return ERROR_NONE;
 }
 
 ERROR_TYPE Parser::ArithOp(TokenPR currToken, ParseNodePR nodeOut, bool required)
@@ -714,9 +748,30 @@ ERROR_TYPE Parser::ArithOp(TokenPR currToken, ParseNodePR nodeOut, bool required
     nodeOut = std::make_shared<ParseNode>();
     nodeOut->type = NodeType::ARITH_OP;
 
-    // TODO: FILL
+    bool done = true;
+    bool requiredThisPass = required;
 
-    return required ? ERROR_INVALID_ARITH_OP : ERROR_NO_OCCURRENCE;
+    do
+    {
+        ParseNodeP nextNode = nullptr;
+        REQ_PARSE(Relation(currToken, nextNode, requiredThisPass));
+        done = true;
+
+        if (currToken->type == T_ADD || currToken->type == T_SUBTRACT)
+        {
+            requiredThisPass = true;
+            done = false;
+
+            ParseNodeP opNode = std::make_shared<ParseNode>();
+            opNode->type = NodeType::SYMBOL;
+            opNode->token = currToken;
+            nodeOut->children.push_back(opNode);
+
+            NEXT_TOKEN;
+        }
+    } while (!done);
+
+    return ERROR_NONE;
 }
 
 ERROR_TYPE Parser::Relation(TokenPR currToken, ParseNodePR nodeOut, bool required)
@@ -725,9 +780,30 @@ ERROR_TYPE Parser::Relation(TokenPR currToken, ParseNodePR nodeOut, bool require
     nodeOut = std::make_shared<ParseNode>();
     nodeOut->type = NodeType::RELATION;
 
-    // TODO: FILL
+    bool done = true;
+    bool requiredThisPass = required;
 
-    return required ? ERROR_INVALID_RELATION : ERROR_NO_OCCURRENCE;
+    do
+    {
+        ParseNodeP nextNode = nullptr;
+        REQ_PARSE(Term(currToken, nextNode, requiredThisPass));
+        done = true;
+
+        if (currToken->type == T_LESSTHAN || currToken->type == T_GREATERTHANEQUALTO || currToken->type == T_LESSTHANEQUALTO || currToken->type == T_GREATERTHAN || currToken->type == T_EQUALS || currToken->type == T_NOTEQUALS)
+        {
+            requiredThisPass = true;
+            done = false;
+
+            ParseNodeP opNode = std::make_shared<ParseNode>();
+            opNode->type = NodeType::SYMBOL;
+            opNode->token = currToken;
+            nodeOut->children.push_back(opNode);
+
+            NEXT_TOKEN;
+        }
+    } while (!done);
+
+    return ERROR_NONE;
 }
 
 ERROR_TYPE Parser::Term(TokenPR currToken, ParseNodePR nodeOut, bool required)
@@ -736,9 +812,30 @@ ERROR_TYPE Parser::Term(TokenPR currToken, ParseNodePR nodeOut, bool required)
     nodeOut = std::make_shared<ParseNode>();
     nodeOut->type = NodeType::TERM;
 
-    // TODO: FILL
+    bool done = true;
+    bool requiredThisPass = required;
 
-    return required ? ERROR_INVALID_TERM : ERROR_NO_OCCURRENCE;
+    do
+    {
+        ParseNodeP nextNode = nullptr;
+        REQ_PARSE(Factor(currToken, nextNode, requiredThisPass));
+        done = true;
+
+        if (currToken->type == T_MULTIPLY || currToken->type == T_DIVIDE)
+        {
+            requiredThisPass = true;
+            done = false;
+
+            ParseNodeP opNode = std::make_shared<ParseNode>();
+            opNode->type = NodeType::SYMBOL;
+            opNode->token = currToken;
+            nodeOut->children.push_back(opNode);
+
+            NEXT_TOKEN;
+        }
+    } while (!done);
+
+    return ERROR_NONE;
 }
 
 ERROR_TYPE Parser::Factor(TokenPR currToken, ParseNodePR nodeOut, bool required)
@@ -747,7 +844,111 @@ ERROR_TYPE Parser::Factor(TokenPR currToken, ParseNodePR nodeOut, bool required)
     nodeOut = std::make_shared<ParseNode>();
     nodeOut->type = NodeType::FACTOR;
 
-    // TODO: FILL
+    if (currToken->type == T_LPAREN)
+    {
+        NEXT_TOKEN;
+
+        ParseNodeP nextNode = nullptr;
+        REQ_PARSE(Expression(currToken, nextNode, true));
+
+        if (currToken->type == T_RPAREN)
+        {
+            NEXT_TOKEN;
+
+            return ERROR_NONE;
+        }
+        return ERROR_MISSING_PAREN;
+    }
+
+    if (currToken->type == T_SUBTRACT) // Need <name> or <number>
+    {
+        ParseNodeP opNode = std::make_shared<ParseNode>();
+        opNode->type = NodeType::SYMBOL;
+        opNode->token = currToken;
+        nodeOut->children.push_back(opNode);
+
+        NEXT_TOKEN;
+
+        ParseNodeP nextNode = nullptr;
+        TRY_PARSE(Name(currToken, nextNode));
+
+        if (error == ERROR_NO_OCCURRENCE)
+        {
+            nextNode = nullptr;
+            TRY_PARSE(Number(currToken, nextNode));
+
+            if (error != ERROR_NONE)
+            {
+                if (required)
+                {
+                    return ERROR_INVALID_FACTOR;
+                }
+                else
+                {
+                    return error;
+                }
+            }
+            return ERROR_NONE;
+        }
+    }
+
+    if (IS_RESERVED_WORD(currToken, "true"))
+    {
+        currToken->value = 1;
+
+        ParseNodeP trueNode = std::make_shared<ParseNode>();
+        trueNode->type = NodeType::SYMBOL;
+        trueNode->token = currToken;
+        nodeOut->children.push_back(trueNode);
+
+
+        NEXT_TOKEN;
+
+        return ERROR_NONE;
+    }
+
+    if (IS_RESERVED_WORD(currToken, "false"))
+    {
+        currToken->value = 0;
+
+        ParseNodeP falseNode = std::make_shared<ParseNode>();
+        falseNode->type = NodeType::SYMBOL;
+        falseNode->token = currToken;
+        nodeOut->children.push_back(falseNode);
+
+
+        NEXT_TOKEN;
+
+        return ERROR_NONE;
+    }
+
+    ParseNodeP nextNode = nullptr;
+    TRY_PARSE(ProcedureCallOrName(currToken, nextNode));
+
+    if (error == ERROR_NO_OCCURRENCE)
+    {
+        nextNode = nullptr;
+        TRY_PARSE(Number(currToken, nextNode));
+
+        if (error == ERROR_NO_OCCURRENCE)
+        {
+            nextNode = nullptr;
+            TRY_PARSE(String(currToken, nextNode));
+
+            if (error != ERROR_NONE)
+            {
+                if (required)
+                {
+                    return ERROR_INVALID_FACTOR;
+                }
+                else
+                {
+                    return error;
+                }
+            }
+            return ERROR_NONE;
+        }
+    }
 
     return required ? ERROR_INVALID_FACTOR : ERROR_NO_OCCURRENCE;
 }
@@ -796,6 +997,33 @@ ERROR_TYPE Parser::ProcedureCallOrName(TokenPR currToken, ParseNodePR nodeOut, b
     }
 
     return required ? ERROR_INVALID_PROCEDURE_CALL_OR_NAME : ERROR_NO_OCCURRENCE;
+}
+
+ERROR_TYPE Parser::Name(TokenPR currToken, ParseNodePR nodeOut, bool required)
+{
+    ERROR_TYPE error = ERROR_NONE;
+    nodeOut = std::make_shared<ParseNode>();
+    nodeOut->type = NodeType::NAME;
+
+    ParseNodeP nextNode = nullptr;
+    REQ_PARSE(Identifier(currToken, nextNode, required));
+
+    if (currToken->type == T_LSQBRACKET)
+    {
+        NEXT_TOKEN;
+
+        nextNode = nullptr;
+        REQ_PARSE(Expression(currToken, nextNode, true));
+
+        if (currToken->type == T_RSQBRACKET)
+        {
+            NEXT_TOKEN;
+            return ERROR_NONE;
+        }
+        return ERROR_MISSING_BRACKET;
+    }
+
+    return ERROR_NONE;
 }
 
 ERROR_TYPE Parser::Number(TokenPR currToken, ParseNodePR nodeOut, bool required)
