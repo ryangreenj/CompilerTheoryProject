@@ -76,7 +76,7 @@ bool Lexer::TrySingleCharToken(ERROR_TYPE &error, char &currChar, Token *token)
         int currLine = 0, currLineChar = 0;
         m_fileIn->GetChar(currChar, currLine, currLineChar);
 
-        token->type = currChar;
+        token->type = (TOKEN_TYPE)currChar;
         token->value = "";
         token->line = currLine;
         token->startChar = currLineChar;
