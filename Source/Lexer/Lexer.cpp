@@ -300,6 +300,7 @@ bool Lexer::TryStringConstToken(ERROR_TYPE &error, char &currChar, Token *token)
             value += currChar;
             m_fileIn->PeekChar(nextChar);
         }
+        m_fileIn->GetChar(currChar);
 
         token->type = T_STRINGCONST;
         token->value = value;

@@ -17,7 +17,12 @@ int main(int argc, char* args[])
     {
         Lexer *l = new Lexer(args[1]);
         Parser *p = new Parser(l);
-        p->Parse();
+        ParseNodeP tree = p->Parse();
+
+        if (tree)
+        {
+            std::cout << "Successfully Parsed" << std::endl;
+        }
 
         std::cout << "Done" << std::endl;
     }
