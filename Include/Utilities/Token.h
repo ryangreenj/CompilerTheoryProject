@@ -82,7 +82,7 @@ enum TOKEN_TYPE
 struct Token
 {
     TOKEN_TYPE type = T_UNKNOWN;
-    std::variant<std::string, int, double> value;
+    std::variant<std::string, int, double> value = "";
     int line = 0;
     int startChar = 0;
 };

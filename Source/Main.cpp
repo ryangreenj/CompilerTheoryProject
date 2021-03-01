@@ -21,7 +21,8 @@ int main(int argc, char* args[])
 
         if (tree)
         {
-            std::cout << "Successfully Parsed" << std::endl;
+            std::cout << "Successfully Parsed" << std::endl << std::endl;
+            ParseTree::PrintTree(std::cout, tree);
         }
 
         std::cout << "Done" << std::endl;
