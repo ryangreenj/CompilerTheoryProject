@@ -21,7 +21,6 @@ private:
     ERROR_TYPE Statement(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE TESTED
     ERROR_TYPE ProcedureDeclaration(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE TESTED
     ERROR_TYPE VariableDeclaration(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE TESTED
-    ERROR_TYPE TypeDeclaration(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE
     ERROR_TYPE ProcedureHeader(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE TESTED
     ERROR_TYPE ProcedureBody(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE TESTED
     ERROR_TYPE TypeMark(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE TESTED

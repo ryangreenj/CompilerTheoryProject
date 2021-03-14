@@ -162,21 +162,15 @@ ERROR_TYPE Parser::Declaration(TokenPR currToken, ParseNodePR nodeOut, bool requ
         nextNode = nullptr;
         TRY_PARSE(VariableDeclaration(currToken, nextNode));
 
-        if (error == ERROR_NO_OCCURRENCE)
+        if (error != ERROR_NONE) // No occurrence
         {
-            nextNode = nullptr;
-            TRY_PARSE(TypeDeclaration(currToken, nextNode));
-
-            if (error != ERROR_NONE) // No occurrence
+            if (hasGlobal)
             {
-                if (hasGlobal)
-                {
-                    return ERROR_INVALID_DECLARATION;
-                }
-                else
-                {
-                    return error;
-                }
+                return ERROR_INVALID_DECLARATION;
+            }
+            else
+            {
+                return error;
             }
         }
     }
@@ -302,33 +296,6 @@ ERROR_TYPE Parser::VariableDeclaration(TokenPR currToken, ParseNodePR nodeOut, b
     return required ? ERROR_INVALID_VARIABLE_DECLARATION : ERROR_NO_OCCURRENCE;
 }
 
-ERROR_TYPE Parser::TypeDeclaration(TokenPR currToken, ParseNodePR nodeOut, bool required)
-{
-    ERROR_TYPE error = ERROR_NONE;
-    nodeOut = std::make_shared<ParseNode>();
-    nodeOut->type = NodeType::TYPE_DECLARATION;
-
-    if (IS_CERTAIN_WORD(currToken, "type"))
-    {
-        NEXT_TOKEN;
-
-        ParseNodeP nextNode = nullptr;
-        REQ_PARSE(Identifier(currToken, nextNode, true));
-
-        if (IS_CERTAIN_WORD(currToken, "is"))
-        {
-            NEXT_TOKEN;
-            nextNode = nullptr;
-            REQ_PARSE(TypeMark(currToken, nextNode, true));
-
-            return ERROR_NONE;
-        }
-        return ERROR_INVALID_TYPE_DECLARATION;
-    }
-
-    return required ? ERROR_INVALID_TYPE_DECLARATION : ERROR_NO_OCCURRENCE;
-}
-
 ERROR_TYPE Parser::ProcedureHeader(TokenPR currToken, ParseNodePR nodeOut, bool required)
 {
     ERROR_TYPE error = ERROR_NONE;
@@ -416,54 +383,6 @@ ERROR_TYPE Parser::TypeMark(TokenPR currToken, ParseNodePR nodeOut, bool require
         nodeOut->children.push_back(constTypeName);
 
         NEXT_TOKEN;
-        return ERROR_NONE;
-    }
-
-    if (IS_CERTAIN_WORD(currToken, "enum"))
-    {
-        ParseNodeP enumNode = std::make_shared<ParseNode>();
-        enumNode->type = NodeType::SYMBOL;
-        enumNode->token = currToken;
-        nodeOut->children.push_back(enumNode);
-
-        NEXT_TOKEN;
-
-        if (currToken->type == T_LCURBRACKET)
-        {
-            NEXT_TOKEN;
-
-            bool endOfList = false;
-
-            do
-            {
-                ParseNodeP nextNode = nullptr;
-                REQ_PARSE(Identifier(currToken, nextNode, true));
-
-                endOfList = true;
-
-                if (currToken->type == T_COMMA)
-                {
-                    NEXT_TOKEN;
-                    endOfList = false;
-                }
-
-            } while (!endOfList);
-
-            if (currToken->type == T_RCURBRACKET)
-            {
-                NEXT_TOKEN;
-                return ERROR_NONE;
-            }
-            return ERROR_MISSING_BRACKET;
-        }
-        return ERROR_MISSING_BRACKET;
-    }
-
-    if (currToken->type == T_IDENTIFIER)
-    {
-        ParseNodeP nextNode = nullptr;
-        REQ_PARSE(Identifier(currToken, nextNode, true));
-
         return ERROR_NONE;
     }
 
