@@ -929,6 +929,8 @@ ERROR_TYPE Parser::Term(TokenPR currToken, ParseNodePR nodeOut, bool required)
         }
     } while (!done);
 
+    nodeOut->valueType = valueType;
+
     return ERROR_NONE;
 }
 
@@ -1127,8 +1129,6 @@ ERROR_TYPE Parser::ProcedureCallOrName(TokenPR currToken, ParseNodePR nodeOut, b
                 return ERROR_EXPECTED_INT;
             }
 
-
-
             if (currToken->type == T_RSQBRACKET)
             {
                 NEXT_TOKEN;
@@ -1200,7 +1200,6 @@ ERROR_TYPE Parser::Number(TokenPR currToken, ParseNodePR nodeOut, bool required)
     if ((currToken->type == T_INTCONST) || (currToken->type == T_DOUBLECONST))
     {
         nodeOut->token = currToken;
-        NEXT_TOKEN;
 
         if (currToken->type == T_INTCONST)
         {
@@ -1211,6 +1210,7 @@ ERROR_TYPE Parser::Number(TokenPR currToken, ParseNodePR nodeOut, bool required)
             nodeOut->valueType = ValueType::DOUBLE;
         }
 
+        NEXT_TOKEN;
         return ERROR_NONE;
     }
 
