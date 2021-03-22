@@ -4,6 +4,7 @@
 #include "Lexer/Lexer.h"
 #include "Parser/ParseTree.h"
 #include "Utilities/Error.h"
+#include "Utilities/SymbolTable.h"
 #include "Utilities/Token.h"
 
 class Parser
@@ -13,15 +14,16 @@ public:
     ParseNodeP Parse();
 private:
     Lexer *m_lexer;
+    SymbolTable *m_symbolTable;
 
     ERROR_TYPE Program(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE TESTED
     ERROR_TYPE ProgramHeader(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE TESTED
     ERROR_TYPE ProgramBody(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE TESTED
     ERROR_TYPE Declaration(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE TESTED
     ERROR_TYPE Statement(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE TESTED
-    ERROR_TYPE ProcedureDeclaration(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE TESTED
-    ERROR_TYPE VariableDeclaration(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE TESTED
-    ERROR_TYPE ProcedureHeader(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE TESTED
+    ERROR_TYPE ProcedureDeclaration(TokenPR currToken, ParseNodePR nodeOut, bool required = false, bool hasGlobal = false); // DONE TESTED
+    ERROR_TYPE VariableDeclaration(TokenPR currToken, ParseNodePR nodeOut, bool required = false, bool hasGlobal = false); // DONE TESTED
+    ERROR_TYPE ProcedureHeader(TokenPR currToken, ParseNodePR nodeOut, bool required = false, bool hasGlobal = false); // DONE TESTED
     ERROR_TYPE ProcedureBody(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE TESTED
     ERROR_TYPE TypeMark(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE TESTED
     ERROR_TYPE ParameterList(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE TESTED

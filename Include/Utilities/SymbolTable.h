@@ -50,7 +50,7 @@ private:
     TableNode *m_head;
     TableNode *m_global;
 
-    int Hash(std::string identifier);
+    //int Hash(std::string identifier);
 };
 
 #endif

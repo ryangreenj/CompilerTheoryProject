@@ -30,6 +30,8 @@ Symbol* TableNode::GetSymbol(std::string identifier)
             return s;
         }
     }
+
+    return nullptr;
 }
 
 bool TableNode::RemoveSymbol(std::string identifier)

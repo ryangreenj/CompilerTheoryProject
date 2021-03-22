@@ -41,6 +41,7 @@ static bool IsReservedWord(std::string in)
 Parser::Parser(Lexer *lexerIn)
 {
     m_lexer = lexerIn;
+    m_symbolTable = new SymbolTable();
 }
 
 ParseNodeP Parser::Parse()
@@ -155,12 +156,12 @@ ERROR_TYPE Parser::Declaration(TokenPR currToken, ParseNodePR nodeOut, bool requ
     }
     
     ParseNodeP nextNode = nullptr;
-    TRY_PARSE(ProcedureDeclaration(currToken, nextNode));
+    TRY_PARSE(ProcedureDeclaration(currToken, nextNode, false, hasGlobal));
     
     if (error == ERROR_NO_OCCURRENCE)
     {
         nextNode = nullptr;
-        TRY_PARSE(VariableDeclaration(currToken, nextNode));
+        TRY_PARSE(VariableDeclaration(currToken, nextNode, false, hasGlobal));
 
         if (error != ERROR_NONE) // No occurrence
         {
@@ -239,22 +240,24 @@ ERROR_TYPE Parser::Statement(TokenPR currToken, ParseNodePR nodeOut, bool requir
     }
 }
 
-ERROR_TYPE Parser::ProcedureDeclaration(TokenPR currToken, ParseNodePR nodeOut, bool required)
+ERROR_TYPE Parser::ProcedureDeclaration(TokenPR currToken, ParseNodePR nodeOut, bool required, bool hasGlobal)
 {
     ERROR_TYPE error = ERROR_NONE;
     nodeOut = std::make_shared<ParseNode>();
     nodeOut->type = NodeType::PROCEDURE_DECLARATION;
 
     ParseNodeP nextNode = nullptr;
-    REQ_PARSE(ProcedureHeader(currToken, nextNode));
+    REQ_PARSE(ProcedureHeader(currToken, nextNode, false, hasGlobal));
 
     nextNode = nullptr;
     REQ_PARSE(ProcedureBody(currToken, nextNode, true));
 
+    RET_IF_ERR(m_symbolTable->DeleteLevel()); // Delete scope after the procedure body
+
     return ERROR_NONE;
 }
 
-ERROR_TYPE Parser::VariableDeclaration(TokenPR currToken, ParseNodePR nodeOut, bool required)
+ERROR_TYPE Parser::VariableDeclaration(TokenPR currToken, ParseNodePR nodeOut, bool required, bool hasGlobal)
 {
     ERROR_TYPE error = ERROR_NONE;
     nodeOut = std::make_shared<ParseNode>();
@@ -267,6 +270,9 @@ ERROR_TYPE Parser::VariableDeclaration(TokenPR currToken, ParseNodePR nodeOut, b
         ParseNodeP nextNode = nullptr;
         REQ_PARSE(Identifier(currToken, nextNode, true));
 
+        // Save ident for adding to symbol table
+        std::string ident = std::get<std::string>(nextNode->token->value);
+
         if (currToken->type == T_COLON)
         {
             NEXT_TOKEN;
@@ -274,6 +280,17 @@ ERROR_TYPE Parser::VariableDeclaration(TokenPR currToken, ParseNodePR nodeOut, b
             nextNode = nullptr;
             REQ_PARSE(TypeMark(currToken, nextNode, true));
 
+            // Insert into symbol table
+            if (hasGlobal)
+            {
+                RET_IF_ERR(m_symbolTable->InsertGlobal(ident, std::get<std::string>(nextNode->children[0]->token->value), 0));
+            }
+            else
+            {
+                RET_IF_ERR(m_symbolTable->Insert(ident, std::get<std::string>(nextNode->children[0]->token->value), 0));
+            }
+
+            // Ignore array for now TODO: Implement arrays
             if (currToken->type == T_LSQBRACKET)
             {
                 NEXT_TOKEN;
@@ -296,7 +313,7 @@ ERROR_TYPE Parser::VariableDeclaration(TokenPR currToken, ParseNodePR nodeOut, b
     return required ? ERROR_INVALID_VARIABLE_DECLARATION : ERROR_NO_OCCURRENCE;
 }
 
-ERROR_TYPE Parser::ProcedureHeader(TokenPR currToken, ParseNodePR nodeOut, bool required)
+ERROR_TYPE Parser::ProcedureHeader(TokenPR currToken, ParseNodePR nodeOut, bool required, bool hasGlobal)
 {
     ERROR_TYPE error = ERROR_NONE;
     nodeOut = std::make_shared<ParseNode>();
@@ -308,6 +325,19 @@ ERROR_TYPE Parser::ProcedureHeader(TokenPR currToken, ParseNodePR nodeOut, bool 
 
         ParseNodeP nextNode = nullptr;
         REQ_PARSE(Identifier(currToken, nextNode, true));
+
+        // Add procedure name to symbol table
+        if (hasGlobal)
+        {
+            RET_IF_ERR(m_symbolTable->InsertGlobal(std::get<std::string>(nextNode->token->value), "procedure", 0)); // TODO: Add type and parameter list information
+        }
+        else
+        {
+            RET_IF_ERR(m_symbolTable->Insert(std::get<std::string>(nextNode->token->value), "procedure", 0));
+        }
+
+        // Create new level of scope now for parameters and everything else
+        RET_IF_ERR(m_symbolTable->AddLevel());
 
         if (currToken->type == T_COLON)
         {
