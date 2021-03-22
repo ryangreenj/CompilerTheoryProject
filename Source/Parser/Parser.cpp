@@ -529,15 +529,7 @@ ERROR_TYPE Parser::AssignmentStatement(TokenPR currToken, ParseNodePR nodeOut, b
     ParseNodeP nextNode = nullptr;
     REQ_PARSE(Destination(currToken, nextNode, required));
 
-    Symbol *destinationSymbol = nullptr;
-    m_symbolTable->Lookup(std::get<std::string>(nextNode->children[0]->token->value), destinationSymbol);
-
-    if (!destinationSymbol)
-    {
-        return ERROR_SYMBOL_DOESNT_EXIST;
-    }
-
-    // TODO: Check type with expression
+    ValueType destType = nextNode->valueType;
 
     if (currToken->type == T_ASSIGN)
     {
@@ -545,6 +537,18 @@ ERROR_TYPE Parser::AssignmentStatement(TokenPR currToken, ParseNodePR nodeOut, b
 
         nextNode = nullptr;
         REQ_PARSE(Expression(currToken, nextNode, required));
+
+        ValueType expType = nextNode->valueType;
+
+        if (destType == expType);
+        else if (destType == ValueType::BOOL && expType == ValueType::INT);
+        else if (destType == ValueType::INT && expType == ValueType::BOOL);
+        else if (destType == ValueType::DOUBLE && expType == ValueType::INT);
+        else if (destType == ValueType::INT && expType == ValueType::DOUBLE);
+        else // If none of these, can't assign
+        {
+            return ERROR_MISMATCHED_TYPES;
+        }
 
         return error;
     }
@@ -723,13 +727,35 @@ ERROR_TYPE Parser::Destination(TokenPR currToken, ParseNodePR nodeOut, bool requ
     ParseNodeP nextNode = nullptr;
     REQ_PARSE(Identifier(currToken, nextNode, required));
 
-    // TODO: Worry about arrays
+    
+    Symbol *destinationSymbol = nullptr;
+    m_symbolTable->Lookup(std::get<std::string>(nextNode->token->value), destinationSymbol);
+
+    if (!destinationSymbol)
+    {
+        return ERROR_SYMBOL_DOESNT_EXIST;
+    }
+
+    nodeOut->valueType = destinationSymbol->type;
+
     if (currToken->type == T_LSQBRACKET)
     {
         NEXT_TOKEN;
 
+        if (destinationSymbol->type < ValueType::INTARRAY)
+        {
+            return ERROR_SYMBOL_NOT_ARRAY;
+        }
+
+        nodeOut->valueType = (ValueType)((int)destinationSymbol->type - NOT_TO_ARRAY);
+
         nextNode = nullptr;
         REQ_PARSE(Expression(currToken, nextNode, true));
+
+        if (nextNode->valueType != ValueType::INT)
+        {
+            return ERROR_EXPECTED_INT;
+        }
 
         if (currToken->type == T_RSQBRACKET)
         {
