@@ -37,9 +37,10 @@ enum TOKEN_TYPE
     T_STRINGCONST = 264,
     T_INTCONST = 265,
     T_DOUBLECONST = 266,
+    T_BOOLCONST = 267,
 
-    T_EOF = 267,
-    T_UNKNOWN = 268,
+    T_EOF = 268,
+    T_UNKNOWN = 269,
 };
 
 /*

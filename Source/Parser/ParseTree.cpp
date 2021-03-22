@@ -18,6 +18,7 @@ void ParseTree::PrintTree(std::ostream &out, ParseNodeP root, int layers)
 
         switch (root->token->type)
         {
+        case T_BOOLCONST:
         case T_INTCONST:
             out << "  TOKEN VALUE: " << std::get<int>(root->token->value);
             break;

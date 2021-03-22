@@ -42,6 +42,17 @@ Parser::Parser(Lexer *lexerIn)
 {
     m_lexer = lexerIn;
     m_symbolTable = new SymbolTable();
+
+    // TEMPORARILY ADD RUNTIME PROCEDURES INTO SYMBOL TABLE
+    m_symbolTable->InsertGlobal("getbool", "procedure", 0);
+    m_symbolTable->InsertGlobal("getinteger", "procedure", 0);
+    m_symbolTable->InsertGlobal("getfloat", "procedure", 0);
+    m_symbolTable->InsertGlobal("getstring", "procedure", 0);
+    m_symbolTable->InsertGlobal("putbool", "procedure", 0);
+    m_symbolTable->InsertGlobal("putinteger", "procedure", 0);
+    m_symbolTable->InsertGlobal("putfloat", "procedure", 0);
+    m_symbolTable->InsertGlobal("putstring", "procedure", 0);
+    m_symbolTable->InsertGlobal("sqrt", "procedure", 0);
 }
 
 ParseNodeP Parser::Parse()
@@ -482,6 +493,16 @@ ERROR_TYPE Parser::AssignmentStatement(TokenPR currToken, ParseNodePR nodeOut, b
     ParseNodeP nextNode = nullptr;
     REQ_PARSE(Destination(currToken, nextNode, required));
 
+    Symbol *destinationSymbol = nullptr;
+    m_symbolTable->Lookup(std::get<std::string>(nextNode->children[0]->token->value), destinationSymbol);
+
+    if (!destinationSymbol)
+    {
+        return ERROR_SYMBOL_DOESNT_EXIST;
+    }
+
+    // TODO: Check type with expression
+
     if (currToken->type == T_ASSIGN)
     {
         NEXT_TOKEN;
@@ -666,6 +687,7 @@ ERROR_TYPE Parser::Destination(TokenPR currToken, ParseNodePR nodeOut, bool requ
     ParseNodeP nextNode = nullptr;
     REQ_PARSE(Identifier(currToken, nextNode, required));
 
+    // TODO: Worry about arrays
     if (currToken->type == T_LSQBRACKET)
     {
         NEXT_TOKEN;
@@ -849,6 +871,7 @@ ERROR_TYPE Parser::Factor(TokenPR currToken, ParseNodePR nodeOut, bool required)
     if (IS_CERTAIN_WORD(currToken, "true"))
     {
         currToken->value = 1;
+        currToken->type = T_BOOLCONST;
 
         ParseNodeP trueNode = std::make_shared<ParseNode>();
         trueNode->type = NodeType::SYMBOL;
@@ -864,6 +887,7 @@ ERROR_TYPE Parser::Factor(TokenPR currToken, ParseNodePR nodeOut, bool required)
     if (IS_CERTAIN_WORD(currToken, "false"))
     {
         currToken->value = 0;
+        currToken->type = T_BOOLCONST;
 
         ParseNodeP falseNode = std::make_shared<ParseNode>();
         falseNode->type = NodeType::SYMBOL;
@@ -952,6 +976,15 @@ ERROR_TYPE Parser::ProcedureCallOrName(TokenPR currToken, ParseNodePR nodeOut, b
         nodeOut->type = NodeType::PROCEDURE_CALL;
         NEXT_TOKEN;
 
+        Symbol *procedureSymbol = nullptr;
+        m_symbolTable->Lookup(std::get<std::string>(nextNode->token->value), procedureSymbol);
+
+        if (!procedureSymbol)
+        {
+            return ERROR_SYMBOL_DOESNT_EXIST;
+        }
+        // TODO: Check parameters
+
         nextNode = nullptr;
         TRY_PARSE(ArgumentList(currToken, nextNode)); // Optional
 
@@ -965,6 +998,14 @@ ERROR_TYPE Parser::ProcedureCallOrName(TokenPR currToken, ParseNodePR nodeOut, b
     else // ELSE IT'S A NAME
     {
         nodeOut->type = NodeType::NAME;
+
+        Symbol *nameSymbol = nullptr;
+        m_symbolTable->Lookup(std::get<std::string>(nextNode->token->value), nameSymbol);
+
+        if (!nameSymbol)
+        {
+            return ERROR_SYMBOL_DOESNT_EXIST;
+        }
 
         if (currToken->type == T_LSQBRACKET)
         {
@@ -994,6 +1035,14 @@ ERROR_TYPE Parser::Name(TokenPR currToken, ParseNodePR nodeOut, bool required)
 
     ParseNodeP nextNode = nullptr;
     REQ_PARSE(Identifier(currToken, nextNode, required));
+
+    Symbol *nameSymbol = nullptr;
+    m_symbolTable->Lookup(std::get<std::string>(nextNode->token->value), nameSymbol);
+
+    if (!nameSymbol)
+    {
+        return ERROR_SYMBOL_DOESNT_EXIST;
+    }
 
     if (currToken->type == T_LSQBRACKET)
     {

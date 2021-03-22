@@ -113,9 +113,12 @@ ERROR_TYPE SymbolTable::InsertGlobal(std::string identifier, std::string type, s
 
 ERROR_TYPE SymbolTable::Lookup(std::string identifier, Symbol *&symbolOut, bool checkGlobal)
 {
-    symbolOut = m_head->GetSymbol(identifier);
+    if (m_head)
+    {
+        symbolOut = m_head->GetSymbol(identifier);
+    }
 
-    if (checkGlobal)
+    if (!symbolOut && checkGlobal)
     {
         return LookupGlobal(identifier, symbolOut);
     }
