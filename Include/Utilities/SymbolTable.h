@@ -7,10 +7,21 @@
 
 #include "Utilities/Error.h"
 
+enum class ValueType
+{
+    NOTHING = 0,
+    INT,
+    DOUBLE,
+    BOOL,
+    STRING,
+};
+
 struct Symbol
 {
     std::string identifier;
-    std::string type;
+    ValueType type;
+    bool isArray = false;
+    bool isFunction = false;
     std::variant<std::string, int, double> value = 0;
 };
 
@@ -36,8 +47,8 @@ class SymbolTable
 public:
     SymbolTable();
 
-    ERROR_TYPE Insert(std::string identifier, std::string type, std::variant<std::string, int, double> value);
-    ERROR_TYPE InsertGlobal(std::string identifier, std::string type, std::variant<std::string, int, double> value);
+    ERROR_TYPE Insert(std::string identifier, ValueType type, bool isArray, bool isFunction, std::variant<std::string, int, double> value);
+    ERROR_TYPE InsertGlobal(std::string identifier, ValueType type, bool isArray, bool isFunction, std::variant<std::string, int, double> value);
     ERROR_TYPE Lookup(std::string identifier, Symbol *&symbolOut, bool checkGlobal = true);
     ERROR_TYPE LookupGlobal(std::string identifier, Symbol *&symbolOut);
     ERROR_TYPE Remove(std::string identifier);

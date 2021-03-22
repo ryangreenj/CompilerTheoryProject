@@ -5,6 +5,7 @@
 #include <ostream>
 #include <vector>
 
+#include "Utilities/SymbolTable.h"
 #include "Utilities/Token.h"
 
 enum class NodeType
@@ -83,6 +84,7 @@ struct ParseNode
 {
     NodeType type = NodeType::UNKNOWN;
     TokenP token = nullptr;
+    ValueType valueType = ValueType::NOTHING;
     std::vector<std::shared_ptr<ParseNode>> children;
 };
 

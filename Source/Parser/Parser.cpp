@@ -44,15 +44,15 @@ Parser::Parser(Lexer *lexerIn)
     m_symbolTable = new SymbolTable();
 
     // TEMPORARILY ADD RUNTIME PROCEDURES INTO SYMBOL TABLE
-    m_symbolTable->InsertGlobal("getbool", "procedure", 0);
-    m_symbolTable->InsertGlobal("getinteger", "procedure", 0);
-    m_symbolTable->InsertGlobal("getfloat", "procedure", 0);
-    m_symbolTable->InsertGlobal("getstring", "procedure", 0);
-    m_symbolTable->InsertGlobal("putbool", "procedure", 0);
-    m_symbolTable->InsertGlobal("putinteger", "procedure", 0);
-    m_symbolTable->InsertGlobal("putfloat", "procedure", 0);
-    m_symbolTable->InsertGlobal("putstring", "procedure", 0);
-    m_symbolTable->InsertGlobal("sqrt", "procedure", 0);
+    m_symbolTable->InsertGlobal("getbool", ValueType::BOOL, false, true, 0);
+    m_symbolTable->InsertGlobal("getinteger", ValueType::INT, false, true, 0);
+    m_symbolTable->InsertGlobal("getfloat", ValueType::DOUBLE, false, true, 0);
+    m_symbolTable->InsertGlobal("getstring", ValueType::STRING, false, true, 0);
+    m_symbolTable->InsertGlobal("putbool", ValueType::BOOL, false, true, 0);
+    m_symbolTable->InsertGlobal("putinteger", ValueType::BOOL, false, true, 0);
+    m_symbolTable->InsertGlobal("putfloat", ValueType::BOOL, false, true, 0);
+    m_symbolTable->InsertGlobal("putstring", ValueType::BOOL, false, true, 0);
+    m_symbolTable->InsertGlobal("sqrt", ValueType::DOUBLE, false, true, 0);
 }
 
 ParseNodeP Parser::Parse()
@@ -291,23 +291,26 @@ ERROR_TYPE Parser::VariableDeclaration(TokenPR currToken, ParseNodePR nodeOut, b
             nextNode = nullptr;
             REQ_PARSE(TypeMark(currToken, nextNode, true));
 
-            // Insert into symbol table
-            if (hasGlobal)
-            {
-                RET_IF_ERR(m_symbolTable->InsertGlobal(ident, std::get<std::string>(nextNode->children[0]->token->value), 0));
-            }
-            else
-            {
-                RET_IF_ERR(m_symbolTable->Insert(ident, std::get<std::string>(nextNode->children[0]->token->value), 0));
-            }
+            ValueType nodeType = nextNode->valueType;
 
-            // Ignore array for now TODO: Implement arrays
             if (currToken->type == T_LSQBRACKET)
             {
                 NEXT_TOKEN;
 
                 nextNode = nullptr;
                 REQ_PARSE(Bound(currToken, nextNode, true));
+
+                int bound = std::get<int>(nextNode->token->value);
+
+                // Insert into symbol table
+                if (hasGlobal)
+                {
+                    RET_IF_ERR(m_symbolTable->InsertGlobal(ident, nodeType, true, false, bound));
+                }
+                else
+                {
+                    RET_IF_ERR(m_symbolTable->Insert(ident, nodeType, true, false, bound));
+                }
 
                 if (currToken->type == T_RSQBRACKET)
                 {
@@ -316,6 +319,17 @@ ERROR_TYPE Parser::VariableDeclaration(TokenPR currToken, ParseNodePR nodeOut, b
                 }
                 return ERROR_MISSING_BRACKET;
             }
+
+            // Insert into symbol table
+            if (hasGlobal)
+            {
+                RET_IF_ERR(m_symbolTable->InsertGlobal(ident, nodeType, false, false, 0));
+            }
+            else
+            {
+                RET_IF_ERR(m_symbolTable->Insert(ident, nodeType, false, false, 0));
+            }
+
             return ERROR_NONE;
         }
         return ERROR_MISSING_COLON;
@@ -337,18 +351,8 @@ ERROR_TYPE Parser::ProcedureHeader(TokenPR currToken, ParseNodePR nodeOut, bool 
         ParseNodeP nextNode = nullptr;
         REQ_PARSE(Identifier(currToken, nextNode, true));
 
-        // Add procedure name to symbol table
-        if (hasGlobal)
-        {
-            RET_IF_ERR(m_symbolTable->InsertGlobal(std::get<std::string>(nextNode->token->value), "procedure", 0)); // TODO: Add type and parameter list information
-        }
-        else
-        {
-            RET_IF_ERR(m_symbolTable->Insert(std::get<std::string>(nextNode->token->value), "procedure", 0));
-        }
-
-        // Create new level of scope now for parameters and everything else
-        RET_IF_ERR(m_symbolTable->AddLevel());
+        // Save ident for later
+        std::string ident = std::get<std::string>(nextNode->token->value);
 
         if (currToken->type == T_COLON)
         {
@@ -356,9 +360,23 @@ ERROR_TYPE Parser::ProcedureHeader(TokenPR currToken, ParseNodePR nodeOut, bool 
             ParseNodeP nextNode = nullptr;
             REQ_PARSE(TypeMark(currToken, nextNode, true));
 
+            // Add procedure name to symbol table
+            if (hasGlobal)
+            {
+                RET_IF_ERR(m_symbolTable->InsertGlobal(ident, nextNode->valueType, false, true, 0)); // TODO: Add type and parameter list information
+            }
+            else
+            {
+                RET_IF_ERR(m_symbolTable->Insert(ident, nextNode->valueType, false, true, 0));
+            }
+
             if (currToken->type == T_LPAREN)
             {
                 NEXT_TOKEN;
+
+                // Create new level of scope now for parameters and everything else
+                RET_IF_ERR(m_symbolTable->AddLevel());
+
                 nextNode = nullptr;
                 TRY_PARSE(ParameterList(currToken, nextNode)); // Optional
 
@@ -422,6 +440,23 @@ ERROR_TYPE Parser::TypeMark(TokenPR currToken, ParseNodePR nodeOut, bool require
         constTypeName->type = NodeType::SYMBOL;
         constTypeName->token = currToken;
         nodeOut->children.push_back(constTypeName);
+
+        if (IS_CERTAIN_WORD(currToken, "integer"))
+        {
+            nodeOut->valueType = ValueType::INT;
+        }
+        else if (IS_CERTAIN_WORD(currToken, "float"))
+        {
+            nodeOut->valueType = ValueType::DOUBLE;
+        }
+        else if (IS_CERTAIN_WORD(currToken, "string"))
+        {
+            nodeOut->valueType = ValueType::STRING;
+        }
+        else if (IS_CERTAIN_WORD(currToken, "bool"))
+        {
+            nodeOut->valueType = ValueType::BOOL;
+        }
 
         NEXT_TOKEN;
         return ERROR_NONE;
