@@ -14,13 +14,18 @@ enum class ValueType
     DOUBLE,
     BOOL,
     STRING,
+    INTARRAY,
+    DOUBLEARRAY,
+    BOOLARRAY,
+    STRINGARRAY,
 };
+
+#define NOT_TO_ARRAY ((int)ValueType::INTARRAY - (int)ValueType::INT)
 
 struct Symbol
 {
     std::string identifier;
     ValueType type;
-    bool isArray = false;
     bool isFunction = false;
     std::variant<std::string, int, double> value = 0;
 };
@@ -47,8 +52,8 @@ class SymbolTable
 public:
     SymbolTable();
 
-    ERROR_TYPE Insert(std::string identifier, ValueType type, bool isArray, bool isFunction, std::variant<std::string, int, double> value);
-    ERROR_TYPE InsertGlobal(std::string identifier, ValueType type, bool isArray, bool isFunction, std::variant<std::string, int, double> value);
+    ERROR_TYPE Insert(std::string identifier, ValueType type, bool isFunction, std::variant<std::string, int, double> value);
+    ERROR_TYPE InsertGlobal(std::string identifier, ValueType type, bool isFunction, std::variant<std::string, int, double> value);
     ERROR_TYPE Lookup(std::string identifier, Symbol *&symbolOut, bool checkGlobal = true);
     ERROR_TYPE LookupGlobal(std::string identifier, Symbol *&symbolOut);
     ERROR_TYPE Remove(std::string identifier);

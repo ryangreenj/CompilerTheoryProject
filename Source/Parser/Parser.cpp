@@ -44,15 +44,15 @@ Parser::Parser(Lexer *lexerIn)
     m_symbolTable = new SymbolTable();
 
     // TEMPORARILY ADD RUNTIME PROCEDURES INTO SYMBOL TABLE
-    m_symbolTable->InsertGlobal("getbool", ValueType::BOOL, false, true, 0);
-    m_symbolTable->InsertGlobal("getinteger", ValueType::INT, false, true, 0);
-    m_symbolTable->InsertGlobal("getfloat", ValueType::DOUBLE, false, true, 0);
-    m_symbolTable->InsertGlobal("getstring", ValueType::STRING, false, true, 0);
-    m_symbolTable->InsertGlobal("putbool", ValueType::BOOL, false, true, 0);
-    m_symbolTable->InsertGlobal("putinteger", ValueType::BOOL, false, true, 0);
-    m_symbolTable->InsertGlobal("putfloat", ValueType::BOOL, false, true, 0);
-    m_symbolTable->InsertGlobal("putstring", ValueType::BOOL, false, true, 0);
-    m_symbolTable->InsertGlobal("sqrt", ValueType::DOUBLE, false, true, 0);
+    m_symbolTable->InsertGlobal("getbool", ValueType::BOOL, true, 0);
+    m_symbolTable->InsertGlobal("getinteger", ValueType::INT, true, 0);
+    m_symbolTable->InsertGlobal("getfloat", ValueType::DOUBLE, true, 0);
+    m_symbolTable->InsertGlobal("getstring", ValueType::STRING, true, 0);
+    m_symbolTable->InsertGlobal("putbool", ValueType::BOOL, true, 0);
+    m_symbolTable->InsertGlobal("putinteger", ValueType::BOOL, true, 0);
+    m_symbolTable->InsertGlobal("putfloat", ValueType::BOOL, true, 0);
+    m_symbolTable->InsertGlobal("putstring", ValueType::BOOL, true, 0);
+    m_symbolTable->InsertGlobal("sqrt", ValueType::DOUBLE, true, 0);
 }
 
 ParseNodeP Parser::Parse()
@@ -303,13 +303,14 @@ ERROR_TYPE Parser::VariableDeclaration(TokenPR currToken, ParseNodePR nodeOut, b
                 int bound = std::get<int>(nextNode->token->value);
 
                 // Insert into symbol table
+                nodeType = (ValueType) ((int)nodeType + NOT_TO_ARRAY);
                 if (hasGlobal)
                 {
-                    RET_IF_ERR(m_symbolTable->InsertGlobal(ident, nodeType, true, false, bound));
+                    RET_IF_ERR(m_symbolTable->InsertGlobal(ident, nodeType, false, bound));
                 }
                 else
                 {
-                    RET_IF_ERR(m_symbolTable->Insert(ident, nodeType, true, false, bound));
+                    RET_IF_ERR(m_symbolTable->Insert(ident, nodeType, false, bound));
                 }
 
                 if (currToken->type == T_RSQBRACKET)
@@ -323,11 +324,11 @@ ERROR_TYPE Parser::VariableDeclaration(TokenPR currToken, ParseNodePR nodeOut, b
             // Insert into symbol table
             if (hasGlobal)
             {
-                RET_IF_ERR(m_symbolTable->InsertGlobal(ident, nodeType, false, false, 0));
+                RET_IF_ERR(m_symbolTable->InsertGlobal(ident, nodeType, false, 0));
             }
             else
             {
-                RET_IF_ERR(m_symbolTable->Insert(ident, nodeType, false, false, 0));
+                RET_IF_ERR(m_symbolTable->Insert(ident, nodeType, false, 0));
             }
 
             return ERROR_NONE;
@@ -363,11 +364,11 @@ ERROR_TYPE Parser::ProcedureHeader(TokenPR currToken, ParseNodePR nodeOut, bool 
             // Add procedure name to symbol table
             if (hasGlobal)
             {
-                RET_IF_ERR(m_symbolTable->InsertGlobal(ident, nextNode->valueType, false, true, 0)); // TODO: Add type and parameter list information
+                RET_IF_ERR(m_symbolTable->InsertGlobal(ident, nextNode->valueType, true, 0)); // TODO: Add type and parameter list information
             }
             else
             {
-                RET_IF_ERR(m_symbolTable->Insert(ident, nextNode->valueType, false, true, 0));
+                RET_IF_ERR(m_symbolTable->Insert(ident, nextNode->valueType, true, 0));
             }
 
             if (currToken->type == T_LPAREN)
@@ -894,6 +895,8 @@ ERROR_TYPE Parser::Factor(TokenPR currToken, ParseNodePR nodeOut, bool required)
         ParseNodeP nextNode = nullptr;
         REQ_PARSE(Expression(currToken, nextNode, true));
 
+        nodeOut->valueType = nextNode->valueType;
+
         if (currToken->type == T_RPAREN)
         {
             NEXT_TOKEN;
@@ -912,6 +915,7 @@ ERROR_TYPE Parser::Factor(TokenPR currToken, ParseNodePR nodeOut, bool required)
         trueNode->type = NodeType::SYMBOL;
         trueNode->token = currToken;
         nodeOut->children.push_back(trueNode);
+        nodeOut->valueType = ValueType::BOOL;
 
 
         NEXT_TOKEN;
@@ -928,7 +932,7 @@ ERROR_TYPE Parser::Factor(TokenPR currToken, ParseNodePR nodeOut, bool required)
         falseNode->type = NodeType::SYMBOL;
         falseNode->token = currToken;
         nodeOut->children.push_back(falseNode);
-
+        nodeOut->valueType = ValueType::BOOL;
 
         NEXT_TOKEN;
 
@@ -963,8 +967,13 @@ ERROR_TYPE Parser::Factor(TokenPR currToken, ParseNodePR nodeOut, bool required)
                     return error;
                 }
             }
+            nodeOut->valueType = nextNode->valueType;
             return ERROR_NONE;
         }
+
+        nodeOut->valueType = nextNode->valueType;
+
+        return ERROR_NONE;
     }
 
     ParseNodeP nextNode = nullptr;
@@ -991,10 +1000,13 @@ ERROR_TYPE Parser::Factor(TokenPR currToken, ParseNodePR nodeOut, bool required)
                     return error;
                 }
             }
+            nodeOut->valueType = ValueType::STRING;
             return ERROR_NONE;
         }
+        nodeOut->valueType = nextNode->valueType;
+        return ERROR_NONE;
     }
-
+    nodeOut->valueType = nextNode->valueType;
     return ERROR_NONE;
 }
 
@@ -1018,6 +1030,8 @@ ERROR_TYPE Parser::ProcedureCallOrName(TokenPR currToken, ParseNodePR nodeOut, b
         {
             return ERROR_SYMBOL_DOESNT_EXIST;
         }
+
+        nodeOut->valueType = procedureSymbol->type;
         // TODO: Check parameters
 
         nextNode = nullptr;
@@ -1042,12 +1056,28 @@ ERROR_TYPE Parser::ProcedureCallOrName(TokenPR currToken, ParseNodePR nodeOut, b
             return ERROR_SYMBOL_DOESNT_EXIST;
         }
 
+        nodeOut->valueType = nameSymbol->type;
+
         if (currToken->type == T_LSQBRACKET)
         {
             NEXT_TOKEN;
 
+            if (nameSymbol->type < ValueType::INTARRAY) // Make sure it's an array if there's bounds
+            {
+                return ERROR_SYMBOL_NOT_ARRAY;
+            }
+
+            nodeOut->valueType = (ValueType)((int)nameSymbol->type - NOT_TO_ARRAY); // Go from array to not array
+
             nextNode = nullptr;
             REQ_PARSE(Expression(currToken, nextNode, true));
+
+            if (nextNode->valueType != ValueType::INT)
+            {
+                return ERROR_EXPECTED_INT;
+            }
+
+
 
             if (currToken->type == T_RSQBRACKET)
             {
@@ -1079,12 +1109,26 @@ ERROR_TYPE Parser::Name(TokenPR currToken, ParseNodePR nodeOut, bool required)
         return ERROR_SYMBOL_DOESNT_EXIST;
     }
 
+    nodeOut->valueType = nameSymbol->type;
+
     if (currToken->type == T_LSQBRACKET)
     {
         NEXT_TOKEN;
 
+        if (nameSymbol->type < ValueType::INTARRAY)
+        {
+            return ERROR_SYMBOL_NOT_ARRAY;
+        }
+
+        nodeOut->valueType = (ValueType)((int)nameSymbol->type - NOT_TO_ARRAY);
+
         nextNode = nullptr;
         REQ_PARSE(Expression(currToken, nextNode, true));
+
+        if (nextNode->valueType != ValueType::INT)
+        {
+            return ERROR_EXPECTED_INT;
+        }
 
         if (currToken->type == T_RSQBRACKET)
         {
@@ -1107,6 +1151,16 @@ ERROR_TYPE Parser::Number(TokenPR currToken, ParseNodePR nodeOut, bool required)
     {
         nodeOut->token = currToken;
         NEXT_TOKEN;
+
+        if (currToken->type == T_INTCONST)
+        {
+            nodeOut->valueType = ValueType::INT;
+        }
+        else
+        {
+            nodeOut->valueType = ValueType::DOUBLE;
+        }
+
         return ERROR_NONE;
     }
 

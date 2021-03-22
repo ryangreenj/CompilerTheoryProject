@@ -59,12 +59,12 @@ SymbolTable::SymbolTable()
     m_global = new TableNode();
 }
 
-ERROR_TYPE SymbolTable::Insert(std::string identifier, ValueType type, bool isArray, bool isFunction, std::variant<std::string, int, double> value)
+ERROR_TYPE SymbolTable::Insert(std::string identifier, ValueType type, bool isFunction, std::variant<std::string, int, double> value)
 {
     if (!m_head)
     {
         // Currently in global scope
-        return InsertGlobal(identifier, type, isArray, isFunction, value);
+        return InsertGlobal(identifier, type, isFunction, value);
     }
     else
     {
@@ -82,7 +82,6 @@ ERROR_TYPE SymbolTable::Insert(std::string identifier, ValueType type, bool isAr
         Symbol *toAdd = new Symbol();
         toAdd->identifier = identifier;
         toAdd->type = type;
-        toAdd->isArray = isArray;
         toAdd->isFunction = isFunction;
         toAdd->value = value;
 
@@ -91,7 +90,7 @@ ERROR_TYPE SymbolTable::Insert(std::string identifier, ValueType type, bool isAr
     }
 }
 
-ERROR_TYPE SymbolTable::InsertGlobal(std::string identifier, ValueType type, bool isArray, bool isFunction, std::variant<std::string, int, double> value)
+ERROR_TYPE SymbolTable::InsertGlobal(std::string identifier, ValueType type, bool isFunction, std::variant<std::string, int, double> value)
 {
     // First check if it exists in the table already
     Symbol *symbolFind = nullptr;
@@ -107,7 +106,6 @@ ERROR_TYPE SymbolTable::InsertGlobal(std::string identifier, ValueType type, boo
     Symbol *toAdd = new Symbol();
     toAdd->identifier = identifier;
     toAdd->type = type;
-    toAdd->isArray = isArray;
     toAdd->isFunction = isFunction;
     toAdd->value = value;
 
