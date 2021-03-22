@@ -859,16 +859,40 @@ ERROR_TYPE Parser::Term(TokenPR currToken, ParseNodePR nodeOut, bool required)
     bool done = true;
     bool requiredThisPass = required;
 
+    ValueType valueType = ValueType::NOTHING;
+
     do
     {
         ParseNodeP nextNode = nullptr;
         REQ_PARSE(Factor(currToken, nextNode, requiredThisPass));
         done = true;
 
+        if (valueType == ValueType::NOTHING)
+        {
+            valueType = nextNode->valueType;
+        }
+        else
+        {
+            if (nextNode->valueType == ValueType::STRING)
+            {
+                return ERROR_INVALID_OPERAND;
+            }
+
+            if (nextNode->valueType > valueType) // BOOL --> INT --> DOUBLE, stay at 'highest' one
+            {
+                valueType = nextNode->valueType;
+            }
+        }
+
         if (currToken->type == T_MULTIPLY || currToken->type == T_DIVIDE)
         {
             requiredThisPass = true;
             done = false;
+
+            if (valueType == ValueType::STRING)
+            {
+                return ERROR_INVALID_OPERAND; // cannot multiply/divide strings
+            }
 
             ParseNodeP opNode = std::make_shared<ParseNode>();
             opNode->type = NodeType::SYMBOL;

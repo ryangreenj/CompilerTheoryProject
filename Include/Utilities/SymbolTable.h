@@ -10,17 +10,17 @@
 enum class ValueType
 {
     NOTHING = 0,
+    BOOL,
     INT,
     DOUBLE,
-    BOOL,
     STRING,
+    BOOLARRAY,
     INTARRAY,
     DOUBLEARRAY,
-    BOOLARRAY,
     STRINGARRAY,
 };
 
-#define NOT_TO_ARRAY ((int)ValueType::INTARRAY - (int)ValueType::INT)
+#define NOT_TO_ARRAY ((int)ValueType::BOOLARRAY - (int)ValueType::BOOL)
 
 struct Symbol
 {
