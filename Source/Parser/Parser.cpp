@@ -43,16 +43,21 @@ Parser::Parser(Lexer *lexerIn)
     m_lexer = lexerIn;
     m_symbolTable = new SymbolTable();
 
-    // TEMPORARILY ADD RUNTIME PROCEDURES INTO SYMBOL TABLE
+    // ADD RUNTIME PROCEDURES INTO SYMBOL TABLE
+    auto boolVec = { ValueType::BOOL };
+    auto intVec = { ValueType::INT };
+    auto doubleVec = { ValueType::DOUBLE };
+    auto stringVec = { ValueType::STRING };
+
     m_symbolTable->InsertGlobal("getbool", ValueType::BOOL, true, 0);
     m_symbolTable->InsertGlobal("getinteger", ValueType::INT, true, 0);
     m_symbolTable->InsertGlobal("getfloat", ValueType::DOUBLE, true, 0);
     m_symbolTable->InsertGlobal("getstring", ValueType::STRING, true, 0);
-    m_symbolTable->InsertGlobal("putbool", ValueType::BOOL, true, 0);
-    m_symbolTable->InsertGlobal("putinteger", ValueType::BOOL, true, 0);
-    m_symbolTable->InsertGlobal("putfloat", ValueType::BOOL, true, 0);
-    m_symbolTable->InsertGlobal("putstring", ValueType::BOOL, true, 0);
-    m_symbolTable->InsertGlobal("sqrt", ValueType::DOUBLE, true, 0);
+    m_symbolTable->InsertGlobal("putbool", ValueType::BOOL, true, 0, boolVec);
+    m_symbolTable->InsertGlobal("putinteger", ValueType::BOOL, true, 0, intVec);
+    m_symbolTable->InsertGlobal("putfloat", ValueType::BOOL, true, 0, doubleVec);
+    m_symbolTable->InsertGlobal("putstring", ValueType::BOOL, true, 0, stringVec);
+    m_symbolTable->InsertGlobal("sqrt", ValueType::DOUBLE, true, 0, intVec);
 }
 
 ParseNodeP Parser::Parse()
@@ -794,6 +799,9 @@ ERROR_TYPE Parser::Expression(TokenPR currToken, ParseNodePR nodeOut, bool requi
 
     bool done = true;
     bool requiredThisPass = required;
+    bool hasNot = false;
+
+    ValueType valueType = ValueType::NOTHING;
 
     do
     {
@@ -805,6 +813,7 @@ ERROR_TYPE Parser::Expression(TokenPR currToken, ParseNodePR nodeOut, bool requi
             nodeOut->children.push_back(notNode);
             
             requiredThisPass = true;
+            hasNot = true;
 
             NEXT_TOKEN;
         }
@@ -813,10 +822,34 @@ ERROR_TYPE Parser::Expression(TokenPR currToken, ParseNodePR nodeOut, bool requi
         REQ_PARSE(ArithOp(currToken, nextNode, requiredThisPass));
         done = true;
 
+        if (valueType == ValueType::NOTHING) // First pass
+        {
+            if (hasNot && nextNode->valueType != ValueType::BOOL && nextNode->valueType != ValueType::INT) // 'Not' only works for bool or int
+            {
+                return ERROR_INVALID_OPERAND;
+            }
+            hasNot = false;
+            valueType = nextNode->valueType;
+        }
+        else
+        {
+            // Value types need to match if we get here again, doesn't change though
+            if (valueType != nextNode->valueType)
+            {
+                return ERROR_MISMATCHED_TYPES;
+            }
+        }
+
         if (currToken->type == T_AND || currToken->type == T_OR)
         {
             requiredThisPass = true;
             done = false;
+
+            // AND and OR only work for BOOL or INT
+            if (!(valueType == ValueType::BOOL || valueType == ValueType::INT))
+            {
+                return ERROR_INVALID_OPERAND;
+            }
 
             ParseNodeP opNode = std::make_shared<ParseNode>();
             opNode->type = NodeType::SYMBOL;
@@ -826,6 +859,8 @@ ERROR_TYPE Parser::Expression(TokenPR currToken, ParseNodePR nodeOut, bool requi
             NEXT_TOKEN;
         }
     } while (!done);
+
+    nodeOut->valueType = valueType;
 
     return ERROR_NONE;
 }
@@ -839,16 +874,35 @@ ERROR_TYPE Parser::ArithOp(TokenPR currToken, ParseNodePR nodeOut, bool required
     bool done = true;
     bool requiredThisPass = required;
 
+    ValueType valueType = ValueType::NOTHING;
+
     do
     {
         ParseNodeP nextNode = nullptr;
         REQ_PARSE(Relation(currToken, nextNode, requiredThisPass));
         done = true;
 
+        if (valueType == ValueType::NOTHING) // First pass
+        {
+            valueType = nextNode->valueType;
+        }
+        else
+        {
+            if (valueType == ValueType::INT && nextNode->valueType == ValueType::DOUBLE)
+            {
+                valueType = ValueType::DOUBLE; // Int -> Double
+            }
+        }
+
         if (currToken->type == T_ADD || currToken->type == T_SUBTRACT)
         {
             requiredThisPass = true;
             done = false;
+
+            if (!(valueType == ValueType::INT || valueType == ValueType::DOUBLE)) // Operators are only defined for INT or DOUBLE
+            {
+                return ERROR_INVALID_OPERAND;
+            }
 
             ParseNodeP opNode = std::make_shared<ParseNode>();
             opNode->type = NodeType::SYMBOL;
@@ -858,6 +912,8 @@ ERROR_TYPE Parser::ArithOp(TokenPR currToken, ParseNodePR nodeOut, bool required
             NEXT_TOKEN;
         }
     } while (!done);
+
+    nodeOut->valueType = valueType;
 
     return ERROR_NONE;
 }
@@ -870,6 +926,9 @@ ERROR_TYPE Parser::Relation(TokenPR currToken, ParseNodePR nodeOut, bool require
 
     bool done = true;
     bool requiredThisPass = required;
+    bool canBeString = true;
+
+    ValueType valueType = ValueType::NOTHING;
 
     do
     {
@@ -877,10 +936,43 @@ ERROR_TYPE Parser::Relation(TokenPR currToken, ParseNodePR nodeOut, bool require
         REQ_PARSE(Term(currToken, nextNode, requiredThisPass));
         done = true;
 
+        if (valueType == ValueType::NOTHING)
+        {
+            valueType = nextNode->valueType;
+        }
+        else
+        {
+            if (valueType == ValueType::STRING) // If prev is a string, both need to be strings
+            {
+                if (canBeString && valueType == nextNode->valueType)
+                {
+                    valueType == ValueType::BOOL;
+                }
+                else
+                {
+                    return ERROR_INVALID_OPERAND;
+                }
+            }
+            else
+            {
+                valueType = ValueType::BOOL; // Other types can convert between themselves
+            }
+        }
+
         if (currToken->type == T_LESSTHAN || currToken->type == T_GREATERTHANEQUALTO || currToken->type == T_LESSTHANEQUALTO || currToken->type == T_GREATERTHAN || currToken->type == T_EQUALS || currToken->type == T_NOTEQUALS)
         {
             requiredThisPass = true;
             done = false;
+
+            if (!(currToken->type == T_EQUALS || currToken->type == T_NOTEQUALS)) // String only works with == and !=
+            {
+                canBeString = false;
+
+                if (valueType == ValueType::STRING) // Check if leftside is already a string
+                {
+                    return ERROR_INVALID_OPERAND;
+                }
+            }
 
             ParseNodeP opNode = std::make_shared<ParseNode>();
             opNode->type = NodeType::SYMBOL;
@@ -890,6 +982,8 @@ ERROR_TYPE Parser::Relation(TokenPR currToken, ParseNodePR nodeOut, bool require
             NEXT_TOKEN;
         }
     } while (!done);
+
+    nodeOut->valueType = valueType;
 
     return ERROR_NONE;
 }
