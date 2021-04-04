@@ -28,6 +28,7 @@ struct Symbol
     ValueType type;
     bool isFunction = false;
     std::variant<std::string, int, double> value = 0;
+    std::vector<ValueType> functionParameterTypes;
 };
 
 class TableNode
@@ -52,8 +53,9 @@ class SymbolTable
 public:
     SymbolTable();
 
-    ERROR_TYPE Insert(std::string identifier, ValueType type, bool isFunction, std::variant<std::string, int, double> value);
-    ERROR_TYPE InsertGlobal(std::string identifier, ValueType type, bool isFunction, std::variant<std::string, int, double> value);
+    ERROR_TYPE Insert(std::string identifier, ValueType type, bool isFunction, std::variant<std::string, int, double> value, std::vector<ValueType> functionParameterTypes = std::vector<ValueType>());
+    ERROR_TYPE InsertUp(std::string identifier, ValueType type, bool isFunction, std::variant<std::string, int, double> value, std::vector<ValueType> functionParameterTypes = std::vector<ValueType>());
+    ERROR_TYPE InsertGlobal(std::string identifier, ValueType type, bool isFunction, std::variant<std::string, int, double> value, std::vector<ValueType> functionParameterTypes = std::vector<ValueType>());
     ERROR_TYPE Lookup(std::string identifier, Symbol *&symbolOut, bool checkGlobal = true);
     ERROR_TYPE LookupGlobal(std::string identifier, Symbol *&symbolOut);
     ERROR_TYPE Remove(std::string identifier);

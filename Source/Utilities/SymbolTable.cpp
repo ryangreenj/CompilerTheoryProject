@@ -59,12 +59,12 @@ SymbolTable::SymbolTable()
     m_global = new TableNode();
 }
 
-ERROR_TYPE SymbolTable::Insert(std::string identifier, ValueType type, bool isFunction, std::variant<std::string, int, double> value)
+ERROR_TYPE SymbolTable::Insert(std::string identifier, ValueType type, bool isFunction, std::variant<std::string, int, double> value, std::vector<ValueType> functionParameterTypes)
 {
     if (!m_head)
     {
         // Currently in global scope
-        return InsertGlobal(identifier, type, isFunction, value);
+        return InsertGlobal(identifier, type, isFunction, value, functionParameterTypes);
     }
     else
     {
@@ -84,13 +84,51 @@ ERROR_TYPE SymbolTable::Insert(std::string identifier, ValueType type, bool isFu
         toAdd->type = type;
         toAdd->isFunction = isFunction;
         toAdd->value = value;
+        toAdd->functionParameterTypes = functionParameterTypes;
 
         m_head->AddSymbol(toAdd);
         return ERROR_NONE;
     }
 }
 
-ERROR_TYPE SymbolTable::InsertGlobal(std::string identifier, ValueType type, bool isFunction, std::variant<std::string, int, double> value)
+// Inserts into the next level up scope, only used for procedures
+ERROR_TYPE SymbolTable::InsertUp(std::string identifier, ValueType type, bool isFunction, std::variant<std::string, int, double> value, std::vector<ValueType> functionParameterTypes)
+{
+    if (!m_head || !m_head->m_next)
+    {
+        // Currently in global scope
+        return InsertGlobal(identifier, type, isFunction, value, functionParameterTypes);
+    }
+    else
+    {
+        TableNode *oldHead = m_head;
+        m_head = m_head->m_next;
+        // First check if it exists in the table already
+        Symbol *symbolFind = nullptr;
+        if (Lookup(identifier, symbolFind, false) == ERROR_NONE)
+        {
+            if (symbolFind)
+            {
+                m_head = oldHead;
+                return ERROR_SYMBOL_ALREADY_EXISTS;
+            }
+        }
+
+        // Add it
+        Symbol *toAdd = new Symbol();
+        toAdd->identifier = identifier;
+        toAdd->type = type;
+        toAdd->isFunction = isFunction;
+        toAdd->value = value;
+        toAdd->functionParameterTypes = functionParameterTypes;
+
+        m_head->AddSymbol(toAdd);
+        m_head = oldHead;
+        return ERROR_NONE;
+    }
+}
+
+ERROR_TYPE SymbolTable::InsertGlobal(std::string identifier, ValueType type, bool isFunction, std::variant<std::string, int, double> value, std::vector<ValueType> functionParameterTypes)
 {
     // First check if it exists in the table already
     Symbol *symbolFind = nullptr;
@@ -108,6 +146,7 @@ ERROR_TYPE SymbolTable::InsertGlobal(std::string identifier, ValueType type, boo
     toAdd->type = type;
     toAdd->isFunction = isFunction;
     toAdd->value = value;
+    toAdd->functionParameterTypes = functionParameterTypes;
 
     m_global->AddSymbol(toAdd);
     return ERROR_NONE;

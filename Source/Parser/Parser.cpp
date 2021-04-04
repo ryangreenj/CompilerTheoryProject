@@ -293,6 +293,8 @@ ERROR_TYPE Parser::VariableDeclaration(TokenPR currToken, ParseNodePR nodeOut, b
 
             ValueType nodeType = nextNode->valueType;
 
+            nodeOut->valueType = nodeType;
+
             if (currToken->type == T_LSQBRACKET)
             {
                 NEXT_TOKEN;
@@ -304,6 +306,9 @@ ERROR_TYPE Parser::VariableDeclaration(TokenPR currToken, ParseNodePR nodeOut, b
 
                 // Insert into symbol table
                 nodeType = (ValueType) ((int)nodeType + NOT_TO_ARRAY);
+
+                nodeOut->valueType = nodeType;
+
                 if (hasGlobal)
                 {
                     RET_IF_ERR(m_symbolTable->InsertGlobal(ident, nodeType, false, bound));
@@ -361,15 +366,7 @@ ERROR_TYPE Parser::ProcedureHeader(TokenPR currToken, ParseNodePR nodeOut, bool 
             ParseNodeP nextNode = nullptr;
             REQ_PARSE(TypeMark(currToken, nextNode, true));
 
-            // Add procedure name to symbol table
-            if (hasGlobal)
-            {
-                RET_IF_ERR(m_symbolTable->InsertGlobal(ident, nextNode->valueType, true, 0)); // TODO: Add type and parameter list information
-            }
-            else
-            {
-                RET_IF_ERR(m_symbolTable->Insert(ident, nextNode->valueType, true, 0));
-            }
+            ValueType procedureReturnType = nextNode->valueType;
 
             if (currToken->type == T_LPAREN)
             {
@@ -381,11 +378,31 @@ ERROR_TYPE Parser::ProcedureHeader(TokenPR currToken, ParseNodePR nodeOut, bool 
                 nextNode = nullptr;
                 TRY_PARSE(ParameterList(currToken, nextNode)); // Optional
 
+                std::vector<ValueType> paramTypes = std::vector<ValueType>();
+                if (nextNode) // Parameter List
+                {
+                    for (ParseNodeP param : nextNode->children)
+                    {
+                        paramTypes.push_back(param->valueType);
+                    }
+                }
+
+                // Add procedure name to symbol table
+                if (hasGlobal)
+                {
+                    RET_IF_ERR(m_symbolTable->InsertGlobal(ident, procedureReturnType, true, 0, paramTypes));
+                }
+                else
+                {
+                    RET_IF_ERR(m_symbolTable->InsertUp(ident, procedureReturnType, true, 0, paramTypes));
+                }
+
                 if (currToken->type == T_RPAREN)
                 {
                     NEXT_TOKEN;
                     return ERROR_NONE;
                 }
+
                 return ERROR_MISSING_PAREN;
             }
             return ERROR_MISSING_PAREN;
@@ -499,6 +516,7 @@ ERROR_TYPE Parser::Parameter(TokenPR currToken, ParseNodePR nodeOut, bool requir
 
     ParseNodeP nextNode = nullptr;
     REQ_PARSE(VariableDeclaration(currToken, nextNode, required));
+    nodeOut->valueType = nextNode->valueType; // Pass VariableDeclaration type up
 
     return ERROR_NONE;
 }
@@ -1084,10 +1102,25 @@ ERROR_TYPE Parser::ProcedureCallOrName(TokenPR currToken, ParseNodePR nodeOut, b
         }
 
         nodeOut->valueType = procedureSymbol->type;
-        // TODO: Check parameters
 
         nextNode = nullptr;
         TRY_PARSE(ArgumentList(currToken, nextNode)); // Optional
+
+        if (nextNode) // Check arguments
+        {
+            if (nextNode->children.size() != procedureSymbol->functionParameterTypes.size())
+            {
+                return ERROR_ARGUMENTS_DONT_MATCH;
+            }
+
+            for (int i = 0; i < nextNode->children.size(); ++i)
+            {
+                if (nextNode->children[i]->valueType != procedureSymbol->functionParameterTypes[i])
+                {
+                    return ERROR_ARGUMENTS_DONT_MATCH;
+                }
+            }
+        }
 
         if (currToken->type == T_RPAREN)
         {
