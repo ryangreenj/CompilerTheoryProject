@@ -7,10 +7,12 @@
 #include "Utilities/FileIn.h"
 #include "Utilities/Token.h"
 
+#include "llvm/IR/LLVMContext.h"
+
 int main(int argc, char* args[])
 {
     std::cout << "Hello Compiler\n";
-
+    llvm::LLVMContext context;
     int error = ERROR_NONE;
 
     if (argc == 2)
@@ -19,13 +21,16 @@ int main(int argc, char* args[])
         Parser *p = new Parser(l);
         ParseNodeP tree = p->Parse();
 
+        Error::PrintAllWarnings(std::cout);
+
         if (tree)
         {
-            std::cout << "Successfully Parsed" << std::endl << std::endl;
             ParseTree::PrintTree(std::cout, tree);
         }
-
-        std::cout << "Done" << std::endl;
+        else
+        {
+            Error::PrintAllErrors(std::cout);
+        }
     }
 
     return error;

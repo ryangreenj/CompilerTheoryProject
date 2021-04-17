@@ -68,6 +68,11 @@ ParseNodeP Parser::Parse()
     ParseNodeP nextNode = nullptr;
     ERROR_TYPE error = Program(currToken, nextNode);
     
+    if (error != ERROR_NONE)
+    {
+        Error::ReportError(error, currToken);
+    }
+
     return error == ERROR_NONE ? nextNode : nullptr;
 }
 
@@ -946,7 +951,7 @@ ERROR_TYPE Parser::Relation(TokenPR currToken, ParseNodePR nodeOut, bool require
             {
                 if (canBeString && valueType == nextNode->valueType)
                 {
-                    valueType == ValueType::BOOL;
+                    valueType = ValueType::BOOL;
                 }
                 else
                 {

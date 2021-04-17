@@ -357,6 +357,7 @@ bool Lexer::TryNumericConstToken(ERROR_TYPE &error, char &currChar, Token *token
         }
 
         token->value = stod(value);
+        return true;
     }
     return false;
 }

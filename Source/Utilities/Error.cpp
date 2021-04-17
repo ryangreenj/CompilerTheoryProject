@@ -3,6 +3,7 @@
 using namespace Error;
 
 #include <ostream>
+#include <sstream>
 #include <tuple>
 #include <vector>
 
@@ -19,6 +20,22 @@ void Error::ReportError(ERROR_TYPE error, std::string message)
 void Error::ReportWarning(ERROR_TYPE error, std::string message)
 {
     WarningList.push_back(ErrorTuple(error, message));
+}
+
+void Error::ReportError(ERROR_TYPE error, TokenP token)
+{
+    std::stringstream ss;
+
+    ss << "Error at Line " << token->line << " Char " << token->startChar << ": " << ERROR_MESSAGES[error];
+    ErrorList.push_back(ErrorTuple(error, ss.str()));
+}
+
+void Error::ReportWarning(ERROR_TYPE error, TokenP token)
+{
+    std::stringstream ss;
+
+    ss << "Warning at Line " << token->line << " Char " << token->startChar << ": " << ERROR_MESSAGES[error];
+    WarningList.push_back(ErrorTuple(error, ss.str()));
 }
 
 bool Error::HasError()
@@ -41,7 +58,7 @@ void Error::ClearAllWarnings()
     WarningList.clear();
 }
 
-void Error::PrintAllErrors(std::ostream outStream)
+void Error::PrintAllErrors(std::ostream &outStream)
 {
     for (ErrorTuple e : ErrorList)
     {
@@ -49,7 +66,7 @@ void Error::PrintAllErrors(std::ostream outStream)
     }
 }
 
-void Error::PrintAllWarnings(std::ostream outStream)
+void Error::PrintAllWarnings(std::ostream &outStream)
 {
     for (ErrorTuple w : WarningList)
     {

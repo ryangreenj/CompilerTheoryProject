@@ -60,10 +60,15 @@ enum ERROR_TYPE
 
 #include <string>
 
+#include "Utilities/Token.h"
+
 namespace Error
 {
     void ReportError(ERROR_TYPE error, std::string message);
     void ReportWarning(ERROR_TYPE error, std::string message);
+
+    void ReportError(ERROR_TYPE error, TokenP token = nullptr);
+    void ReportWarning(ERROR_TYPE error, TokenP token = nullptr);
 
     bool HasError();
     bool HasWarning();
@@ -71,8 +76,61 @@ namespace Error
     void ClearAllErrors();
     void ClearAllWarnings();
 
-    void PrintAllErrors(std::ostream outStream);
-    void PrintAllWarnings(std::ostream outStream);
+    void PrintAllErrors(std::ostream &outStream);
+    void PrintAllWarnings(std::ostream &outStream);
+
+    const std::string ERROR_MESSAGES[] = {
+        "No error",
+        "Unable to open file",
+        "Reached end of file",
+        "Unexpected character found",
+
+        "Program does not contain end sequence",
+        "No occurrence",
+        "Program header is invalid",
+        "Program body is invalid",
+        "Declaration is invalid",
+        "Type mark is invalid",
+        "Parameter list is invalid",
+        "ENUM",
+        "Bound is invalid",
+        "TYPE DELCARATION",
+        "Invalid variable declaration",
+        "Invalid statement",
+        "Invalid if statement",
+        "Invalid loop statement",
+        "Invalid return statement",
+        "Invalid identifier",
+        "Invalid procedure call or name",
+        "Invalid string",
+        "Invalid number",
+        "Invalid destination",
+        "Invalid argument list",
+        "Invalid procedure header",
+        "Invalid procedure body",
+        "Invalid procedure declaration",
+        "Invalid expression",
+        "Invalid arithmetic operation",
+        "Invalid relation",
+        "Invalid term",
+        "Invalid factor",
+
+        "Missing semicolon",
+        "Missing colon",
+        "Missing bracket",
+        "Missing parenthesis",
+        "Missing assignment",
+        
+        "Symbol table does not exist",
+        "Symbol does not exist in current scope",
+        "Duplicate symbol declaration in current scope",
+
+        "Symbol is not an array",
+        "Expected integer",
+        "Invalid operand type",
+        "Mismatched types",
+        "Arguments do not match procedure declaration"
+    };
 }
 
 #endif
