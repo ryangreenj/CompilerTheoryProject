@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include "CodeGen/CodeGen.h"
+
 #define REQ_PARSE(func) error = func; RET_IF_ERR(error); nodeOut->children.push_back(nextNode)
 #define TRY_PARSE(func) error = func; if (error == ERROR_NONE) nodeOut->children.push_back(nextNode); else if (error != ERROR_NO_OCCURRENCE) return error;
 #define TRY_PARSE_MULTI(func) error = ERROR_NONE; do { error = func; if (error == ERROR_NONE) nodeOut->children.push_back(nextNode); else if(error != ERROR_NO_OCCURRENCE) return error; } while (error == ERROR_NONE)
@@ -270,6 +272,8 @@ ERROR_TYPE Parser::ProcedureDeclaration(TokenPR currToken, ParseNodePR nodeOut, 
     ParseNodeP nextNode = nullptr;
     REQ_PARSE(ProcedureHeader(currToken, nextNode, false, hasGlobal));
 
+    CodeGen::ProcedureDeclaration(nextNode->IRFunction);
+
     nextNode = nullptr;
     REQ_PARSE(ProcedureBody(currToken, nextNode, true));
 
@@ -354,6 +358,62 @@ ERROR_TYPE Parser::VariableDeclaration(TokenPR currToken, ParseNodePR nodeOut, b
     return required ? ERROR_INVALID_VARIABLE_DECLARATION : ERROR_NO_OCCURRENCE;
 }
 
+ERROR_TYPE Parser::VariableDeclarationNoInsert(TokenPR currToken, ParseNodePR nodeOut, bool required)
+{
+    ERROR_TYPE error = ERROR_NONE;
+    nodeOut = std::make_shared<ParseNode>();
+    nodeOut->type = NodeType::VARIABLE_DECLARATION;
+
+    if (IS_CERTAIN_WORD(currToken, "variable"))
+    {
+        NEXT_TOKEN;
+
+        ParseNodeP nextNode = nullptr;
+        REQ_PARSE(Identifier(currToken, nextNode, true));
+
+        nodeOut->token = nextNode->token; // Pass name up
+
+        if (currToken->type == T_COLON)
+        {
+            NEXT_TOKEN;
+
+            nextNode = nullptr;
+            REQ_PARSE(TypeMark(currToken, nextNode, true));
+
+            ValueType nodeType = nextNode->valueType;
+
+            nodeOut->valueType = nodeType;
+
+            if (currToken->type == T_LSQBRACKET)
+            {
+                NEXT_TOKEN;
+
+                nextNode = nullptr;
+                REQ_PARSE(Bound(currToken, nextNode, true));
+
+                int bound = std::get<int>(nextNode->token->value);
+
+                // Insert into symbol table
+                nodeType = (ValueType)((int)nodeType + NOT_TO_ARRAY);
+
+                nodeOut->valueType = nodeType;
+
+                if (currToken->type == T_RSQBRACKET)
+                {
+                    NEXT_TOKEN;
+                    return ERROR_NONE;
+                }
+                return ERROR_MISSING_BRACKET;
+            }
+
+            return ERROR_NONE;
+        }
+        return ERROR_MISSING_COLON;
+    }
+
+    return required ? ERROR_INVALID_VARIABLE_DECLARATION : ERROR_NO_OCCURRENCE;
+}
+
 ERROR_TYPE Parser::ProcedureHeader(TokenPR currToken, ParseNodePR nodeOut, bool required, bool hasGlobal)
 {
     ERROR_TYPE error = ERROR_NONE;
@@ -369,6 +429,10 @@ ERROR_TYPE Parser::ProcedureHeader(TokenPR currToken, ParseNodePR nodeOut, bool 
 
         // Save ident for later
         std::string ident = std::get<std::string>(nextNode->token->value);
+
+        // LLVM IR Codegen
+        std::vector<llvm::Type *> ArgTypes;
+        std::vector<std::string> paramNames = std::vector<std::string>();
 
         if (currToken->type == T_COLON)
         {
@@ -389,11 +453,31 @@ ERROR_TYPE Parser::ProcedureHeader(TokenPR currToken, ParseNodePR nodeOut, bool 
                 TRY_PARSE(ParameterList(currToken, nextNode)); // Optional
 
                 std::vector<ValueType> paramTypes = std::vector<ValueType>();
+                
                 if (nextNode) // Parameter List
                 {
                     for (ParseNodeP param : nextNode->children)
                     {
                         paramTypes.push_back(param->valueType);
+                        paramNames.push_back(std::get<std::string>(param->token->value));
+
+                        switch (param->valueType)
+                        {
+                        case ValueType::BOOL:
+                            ArgTypes.push_back(CodeGen::BoolType());
+                            break;
+                        case ValueType::INT:
+                            ArgTypes.push_back(CodeGen::IntType());
+                            break;
+                        case ValueType::DOUBLE:
+                            ArgTypes.push_back(CodeGen::DoubleType());
+                            break;
+                        case ValueType::STRING:
+                            ArgTypes.push_back(CodeGen::StringType());
+                            break;
+                        default:
+                            break;
+                        }
                     }
                 }
 
@@ -406,6 +490,28 @@ ERROR_TYPE Parser::ProcedureHeader(TokenPR currToken, ParseNodePR nodeOut, bool 
                 {
                     RET_IF_ERR(m_symbolTable->InsertUp(ident, procedureReturnType, true, 0, paramTypes));
                 }
+
+                llvm::Type *IRProcReturnType = nullptr;
+
+                switch (procedureReturnType)
+                {
+                case ValueType::BOOL:
+                    IRProcReturnType = CodeGen::BoolType();
+                    break;
+                case ValueType::INT:
+                    IRProcReturnType = CodeGen::IntType();
+                    break;
+                case ValueType::DOUBLE:
+                    IRProcReturnType = CodeGen::DoubleType();
+                    break;
+                case ValueType::STRING:
+                    IRProcReturnType = CodeGen::StringType();
+                    break;
+                default:
+                    break;
+                }
+
+                nodeOut->IRFunction = CodeGen::ProcedureHeader(ident, IRProcReturnType, paramNames, ArgTypes);
 
                 if (currToken->type == T_RPAREN)
                 {
@@ -525,7 +631,8 @@ ERROR_TYPE Parser::Parameter(TokenPR currToken, ParseNodePR nodeOut, bool requir
     nodeOut->type = NodeType::PARAMETER;
 
     ParseNodeP nextNode = nullptr;
-    REQ_PARSE(VariableDeclaration(currToken, nextNode, required));
+    REQ_PARSE(VariableDeclarationNoInsert(currToken, nextNode, required));
+    nodeOut->token = nextNode->token; // Pass variable name up
     nodeOut->valueType = nextNode->valueType; // Pass VariableDeclaration type up
 
     return ERROR_NONE;
@@ -804,9 +911,11 @@ ERROR_TYPE Parser::Expression(TokenPR currToken, ParseNodePR nodeOut, bool requi
 
     bool done = true;
     bool requiredThisPass = required;
-    bool hasNot = false;
 
     ValueType valueType = ValueType::NOTHING;
+
+    llvm::Value *LHS = nullptr, *RHS = nullptr;
+    TOKEN_TYPE opType = T_UNKNOWN;
 
     do
     {
@@ -816,11 +925,21 @@ ERROR_TYPE Parser::Expression(TokenPR currToken, ParseNodePR nodeOut, bool requi
             notNode->type = NodeType::SYMBOL;
             notNode->token = currToken;
             nodeOut->children.push_back(notNode);
-            
-            requiredThisPass = true;
-            hasNot = true;
 
             NEXT_TOKEN;
+
+            ParseNodeP nextNode = nullptr;
+            REQ_PARSE(ArithOp(currToken, nextNode, true));
+
+            if (nextNode->valueType != ValueType::BOOL && nextNode->valueType != ValueType::INT) // 'Not' only works for bool or int
+            {
+                return ERROR_INVALID_OPERAND;
+            }
+
+            nodeOut->valueType = nextNode->valueType;
+            nodeOut->IRVal = CodeGen::NegateExpr(nextNode->IRVal);
+
+            return ERROR_NONE;
         }
 
         ParseNodeP nextNode = nullptr;
@@ -829,12 +948,8 @@ ERROR_TYPE Parser::Expression(TokenPR currToken, ParseNodePR nodeOut, bool requi
 
         if (valueType == ValueType::NOTHING) // First pass
         {
-            if (hasNot && nextNode->valueType != ValueType::BOOL && nextNode->valueType != ValueType::INT) // 'Not' only works for bool or int
-            {
-                return ERROR_INVALID_OPERAND;
-            }
-            hasNot = false;
             valueType = nextNode->valueType;
+            LHS = nextNode->IRVal;
         }
         else
         {
@@ -843,6 +958,8 @@ ERROR_TYPE Parser::Expression(TokenPR currToken, ParseNodePR nodeOut, bool requi
             {
                 return ERROR_MISMATCHED_TYPES;
             }
+            RHS = nextNode->IRVal;
+            LHS = CodeGen::ExprExpr(LHS, RHS, opType);
         }
 
         if (currToken->type == T_AND || currToken->type == T_OR)
@@ -861,11 +978,14 @@ ERROR_TYPE Parser::Expression(TokenPR currToken, ParseNodePR nodeOut, bool requi
             opNode->token = currToken;
             nodeOut->children.push_back(opNode);
 
+            opType = currToken->type;
+
             NEXT_TOKEN;
         }
     } while (!done);
 
     nodeOut->valueType = valueType;
+    nodeOut->IRVal = LHS;
 
     return ERROR_NONE;
 }
@@ -881,6 +1001,9 @@ ERROR_TYPE Parser::ArithOp(TokenPR currToken, ParseNodePR nodeOut, bool required
 
     ValueType valueType = ValueType::NOTHING;
 
+    llvm::Value *LHS = nullptr, *RHS = nullptr;
+    TOKEN_TYPE opType = T_UNKNOWN;
+
     do
     {
         ParseNodeP nextNode = nullptr;
@@ -890,6 +1013,7 @@ ERROR_TYPE Parser::ArithOp(TokenPR currToken, ParseNodePR nodeOut, bool required
         if (valueType == ValueType::NOTHING) // First pass
         {
             valueType = nextNode->valueType;
+            LHS = nextNode->IRVal;
         }
         else
         {
@@ -897,6 +1021,8 @@ ERROR_TYPE Parser::ArithOp(TokenPR currToken, ParseNodePR nodeOut, bool required
             {
                 valueType = ValueType::DOUBLE; // Int -> Double
             }
+            RHS = nextNode->IRVal;
+            LHS = CodeGen::ArithOpExpr(LHS, RHS, opType);
         }
 
         if (currToken->type == T_ADD || currToken->type == T_SUBTRACT)
@@ -914,11 +1040,14 @@ ERROR_TYPE Parser::ArithOp(TokenPR currToken, ParseNodePR nodeOut, bool required
             opNode->token = currToken;
             nodeOut->children.push_back(opNode);
 
+            opType = currToken->type;
+
             NEXT_TOKEN;
         }
     } while (!done);
 
     nodeOut->valueType = valueType;
+    nodeOut->IRVal = LHS;
 
     return ERROR_NONE;
 }
@@ -935,17 +1064,21 @@ ERROR_TYPE Parser::Relation(TokenPR currToken, ParseNodePR nodeOut, bool require
 
     ValueType valueType = ValueType::NOTHING;
 
+    llvm::Value *LHS = nullptr, *RHS = nullptr;
+    TOKEN_TYPE opType = T_UNKNOWN;
+
     do
     {
         ParseNodeP nextNode = nullptr;
         REQ_PARSE(Term(currToken, nextNode, requiredThisPass));
         done = true;
 
-        if (valueType == ValueType::NOTHING)
+        if (valueType == ValueType::NOTHING) // First LHS
         {
             valueType = nextNode->valueType;
+            LHS = nextNode->IRVal;
         }
-        else
+        else // RHS
         {
             if (valueType == ValueType::STRING) // If prev is a string, both need to be strings
             {
@@ -961,6 +1094,8 @@ ERROR_TYPE Parser::Relation(TokenPR currToken, ParseNodePR nodeOut, bool require
             else
             {
                 valueType = ValueType::BOOL; // Other types can convert between themselves
+                RHS = nextNode->IRVal;
+                LHS = CodeGen::FactorExpr(LHS, RHS, opType);
             }
         }
 
@@ -984,11 +1119,14 @@ ERROR_TYPE Parser::Relation(TokenPR currToken, ParseNodePR nodeOut, bool require
             opNode->token = currToken;
             nodeOut->children.push_back(opNode);
 
+            opType = currToken->type;
+
             NEXT_TOKEN;
         }
     } while (!done);
 
     nodeOut->valueType = valueType;
+    nodeOut->IRVal = LHS;
 
     return ERROR_NONE;
 }
@@ -1004,27 +1142,35 @@ ERROR_TYPE Parser::Term(TokenPR currToken, ParseNodePR nodeOut, bool required)
 
     ValueType valueType = ValueType::NOTHING;
 
+    llvm::Value *LHS = nullptr, *RHS = nullptr;
+    TOKEN_TYPE opType = T_UNKNOWN;
+
     do
     {
         ParseNodeP nextNode = nullptr;
         REQ_PARSE(Factor(currToken, nextNode, requiredThisPass));
         done = true;
 
-        if (valueType == ValueType::NOTHING)
+        if (valueType == ValueType::NOTHING) // First LHS
         {
             valueType = nextNode->valueType;
+            LHS = nextNode->IRVal;
         }
-        else
+        else // RHS
         {
             if (nextNode->valueType == ValueType::STRING)
             {
                 return ERROR_INVALID_OPERAND;
             }
 
+            // Figure out type and codegen
             if (nextNode->valueType > valueType) // BOOL --> INT --> DOUBLE, stay at 'highest' one
             {
                 valueType = nextNode->valueType;
             }
+
+            RHS = nextNode->IRVal;
+            LHS = CodeGen::TermExpr(LHS, RHS, opType);
         }
 
         if (currToken->type == T_MULTIPLY || currToken->type == T_DIVIDE)
@@ -1042,11 +1188,14 @@ ERROR_TYPE Parser::Term(TokenPR currToken, ParseNodePR nodeOut, bool required)
             opNode->token = currToken;
             nodeOut->children.push_back(opNode);
 
+            opType = currToken->type;
+
             NEXT_TOKEN;
         }
     } while (!done);
 
     nodeOut->valueType = valueType;
+    nodeOut->IRVal = LHS;
 
     return ERROR_NONE;
 }
@@ -1065,6 +1214,7 @@ ERROR_TYPE Parser::Factor(TokenPR currToken, ParseNodePR nodeOut, bool required)
         REQ_PARSE(Expression(currToken, nextNode, true));
 
         nodeOut->valueType = nextNode->valueType;
+        nodeOut->IRVal = nextNode->IRVal;
 
         if (currToken->type == T_RPAREN)
         {
@@ -1085,7 +1235,7 @@ ERROR_TYPE Parser::Factor(TokenPR currToken, ParseNodePR nodeOut, bool required)
         trueNode->token = currToken;
         nodeOut->children.push_back(trueNode);
         nodeOut->valueType = ValueType::BOOL;
-
+        nodeOut->IRVal = CodeGen::BoolExpr(true);
 
         NEXT_TOKEN;
 
@@ -1102,6 +1252,7 @@ ERROR_TYPE Parser::Factor(TokenPR currToken, ParseNodePR nodeOut, bool required)
         falseNode->token = currToken;
         nodeOut->children.push_back(falseNode);
         nodeOut->valueType = ValueType::BOOL;
+        nodeOut->IRVal = CodeGen::BoolExpr(false);
 
         NEXT_TOKEN;
 
@@ -1137,10 +1288,13 @@ ERROR_TYPE Parser::Factor(TokenPR currToken, ParseNodePR nodeOut, bool required)
                 }
             }
             nodeOut->valueType = nextNode->valueType;
+            nodeOut->IRVal = CodeGen::NegateExpr(nextNode->IRVal);
+
             return ERROR_NONE;
         }
 
         nodeOut->valueType = nextNode->valueType;
+        nodeOut->IRVal = CodeGen::NegateExpr(nextNode->IRVal); // Create negation of child NAME node
 
         return ERROR_NONE;
     }
@@ -1170,12 +1324,18 @@ ERROR_TYPE Parser::Factor(TokenPR currToken, ParseNodePR nodeOut, bool required)
                 }
             }
             nodeOut->valueType = ValueType::STRING;
+            nodeOut->IRVal = nextNode->IRVal;
+
             return ERROR_NONE;
         }
         nodeOut->valueType = nextNode->valueType;
+        nodeOut->IRVal = nextNode->IRVal;
+
         return ERROR_NONE;
     }
     nodeOut->valueType = nextNode->valueType;
+    nodeOut->IRVal = nextNode->IRVal;
+
     return ERROR_NONE;
 }
 
@@ -1205,6 +1365,8 @@ ERROR_TYPE Parser::ProcedureCallOrName(TokenPR currToken, ParseNodePR nodeOut, b
         nextNode = nullptr;
         TRY_PARSE(ArgumentList(currToken, nextNode)); // Optional
 
+        std::vector<llvm::Value *> ArgIRVals;
+
         if (nextNode) // Check arguments
         {
             if (nextNode->children.size() != procedureSymbol->functionParameterTypes.size())
@@ -1218,6 +1380,7 @@ ERROR_TYPE Parser::ProcedureCallOrName(TokenPR currToken, ParseNodePR nodeOut, b
                 {
                     return ERROR_ARGUMENTS_DONT_MATCH;
                 }
+                ArgIRVals.push_back(nextNode->children[i]->IRVal);
             }
         }
 
@@ -1241,6 +1404,7 @@ ERROR_TYPE Parser::ProcedureCallOrName(TokenPR currToken, ParseNodePR nodeOut, b
         }
 
         nodeOut->valueType = nameSymbol->type;
+        nodeOut->IRVal = CodeGen::VariableExpr(nameSymbol->identifier); // TODO: Handle arrays codegen
 
         if (currToken->type == T_LSQBRACKET)
         {
@@ -1292,6 +1456,7 @@ ERROR_TYPE Parser::Name(TokenPR currToken, ParseNodePR nodeOut, bool required)
     }
 
     nodeOut->valueType = nameSymbol->type;
+    nodeOut->IRVal = CodeGen::VariableExpr(nameSymbol->identifier); // TODO: Handle arrays codegen
 
     if (currToken->type == T_LSQBRACKET)
     {
@@ -1336,10 +1501,12 @@ ERROR_TYPE Parser::Number(TokenPR currToken, ParseNodePR nodeOut, bool required)
         if (currToken->type == T_INTCONST)
         {
             nodeOut->valueType = ValueType::INT;
+            nodeOut->IRVal = CodeGen::IntExpr(std::get<int>(nodeOut->token->value));
         }
         else
         {
             nodeOut->valueType = ValueType::DOUBLE;
+            nodeOut->IRVal = CodeGen::FloatExpr(std::get<double>(nodeOut->token->value));
         }
 
         NEXT_TOKEN;

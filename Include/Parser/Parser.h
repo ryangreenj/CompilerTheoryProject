@@ -23,6 +23,7 @@ private:
     ERROR_TYPE Statement(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE TESTED
     ERROR_TYPE ProcedureDeclaration(TokenPR currToken, ParseNodePR nodeOut, bool required = false, bool hasGlobal = false); // DONE TESTED
     ERROR_TYPE VariableDeclaration(TokenPR currToken, ParseNodePR nodeOut, bool required = false, bool hasGlobal = false); // DONE TESTED
+    ERROR_TYPE VariableDeclarationNoInsert(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE TESTED
     ERROR_TYPE ProcedureHeader(TokenPR currToken, ParseNodePR nodeOut, bool required = false, bool hasGlobal = false); // DONE TESTED
     ERROR_TYPE ProcedureBody(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE TESTED
     ERROR_TYPE TypeMark(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE TESTED
@@ -39,10 +40,10 @@ private:
     ERROR_TYPE Expression(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE TESTED
     ERROR_TYPE ArithOp(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE TESTED
     ERROR_TYPE Relation(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE TESTED
-    ERROR_TYPE Term(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE TESTED
-    ERROR_TYPE Factor(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE TESTED
-    ERROR_TYPE Name(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // Handle with <procedure_call>, since they both only occur in <factor>     DONE TESTED
-    ERROR_TYPE Number(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE TESTED
+    ERROR_TYPE Term(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE TESTED CODEGENNED
+    ERROR_TYPE Factor(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE TESTED CODEGENNED
+    ERROR_TYPE Name(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // Handle with <procedure_call>, since they both only occur in <factor>     DONE TESTED CODEGENNED
+    ERROR_TYPE Number(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE TESTED CODEGENNED
     ERROR_TYPE String(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE
     ERROR_TYPE Identifier(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE TESTED
 };

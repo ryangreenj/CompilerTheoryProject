@@ -26,7 +26,10 @@ void Error::ReportError(ERROR_TYPE error, TokenP token)
 {
     std::stringstream ss;
 
-    ss << "Error at Line " << token->line << " Char " << token->startChar << ": " << ERROR_MESSAGES[error];
+    if (token)
+        ss << "Error at Line " << token->line << " Char " << token->startChar << ": " << ERROR_MESSAGES[error];
+    else
+        ss << "Error: " << ERROR_MESSAGES[error];
     ErrorList.push_back(ErrorTuple(error, ss.str()));
 }
 
@@ -34,7 +37,10 @@ void Error::ReportWarning(ERROR_TYPE error, TokenP token)
 {
     std::stringstream ss;
 
-    ss << "Warning at Line " << token->line << " Char " << token->startChar << ": " << ERROR_MESSAGES[error];
+    if (token)
+        ss << "Warning at Line " << token->line << " Char " << token->startChar << ": " << ERROR_MESSAGES[error];
+    else
+        ss << "Warning: " << ERROR_MESSAGES[error];
     WarningList.push_back(ErrorTuple(error, ss.str()));
 }
 
