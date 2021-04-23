@@ -3,15 +3,32 @@
 #include <fstream>
 #include <map>
 #include <memory>
+#include <sstream>
 
 #include "Utilities/Error.h"
 
+#include "llvm/ADT/APFloat.h"
+#include "llvm/ADT/Optional.h"
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/Constants.h"
 #include "llvm/IR/DerivedTypes.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/LegacyPassManager.h"
+#include "llvm/IR/Module.h"
+#include "llvm/IR/Type.h"
 #include "llvm/IR/Verifier.h"
+#include "llvm/Support/FileSystem.h"
+#include "llvm/Support/Host.h"
+#include "llvm/Support/raw_ostream.h"
 #include "llvm/Support/raw_os_ostream.h"
-#include "llvm/Transforms/Scalar/Reassociate.h"
+#include "llvm/Support/TargetRegistry.h"
+#include "llvm/Support/TargetSelect.h"
+#include "llvm/Target/TargetMachine.h"
+#include "llvm/Target/TargetOptions.h"
 
 using namespace Error;
 using namespace llvm;
@@ -64,11 +81,69 @@ void CodeGen::Print()
     TheModule->print(errs(), nullptr);
 }
 
-void CodeGen::Out()
+void CodeGen::Out(std::string outFileName)
 {
+#ifdef _WIN64
     std::ofstream StdOutputFile("test.ll");
     raw_os_ostream OutputFile(StdOutputFile);
     TheModule->print(OutputFile, nullptr);
+#else
+
+    auto TargetTriple = sys::getDefaultTargetTriple();
+
+    InitializeAllTargetInfos();
+    InitializeAllTargets();
+    InitializeAllTargetMCs();
+    InitializeAllAsmParsers();
+    InitializeAllAsmPrinters();
+
+    std::string Error;
+    auto Target = TargetRegistry::lookupTarget(TargetTriple, Error);
+
+    if (!Target)
+    {
+        errs() << Error;
+        return; // TODO: Throw error
+    }
+
+    auto CPU = "generic";
+    auto Features = "";
+
+    TargetOptions opt;
+    auto RM = Optional<Reloc::Model>();
+    auto TargetMachine = Target->createTargetMachine(TargetTriple, CPU, Features, opt, RM);
+
+    TheModule->setDataLayout(TargetMachine->createDataLayout());
+    TheModule->setTargetTriple(TargetTriple);
+
+    auto Filename = "tempOutFile.o";
+    std::error_code EC;
+    raw_fd_ostream dest(Filename, EC, sys::fs::F_None);
+
+    if (EC)
+    {
+        errs() << "Could not open file: " << EC.message();
+        return; // TODO: Throw error
+    }
+
+    legacy::PassManager pass;
+    auto FileType = TargetMachine::CGFT_ObjectFile;
+
+    if (TargetMachine->addPassesToEmitFile(pass, dest, FileType))
+    {
+        errs() << "TargetMachine can't emit a file of this type";
+        return; // TODO: Throw error
+    }
+
+    pass.run(*TheModule);
+    dest.flush();
+
+    std::stringstream ss;
+    ss << "gcc " << Filename << " -no-pie -o " << outFileName;
+
+    std::system(ss.str().c_str()); // compile
+    std::remove(Filename);
+#endif
 }
 
 void CodeGen::InitPutFloat()
@@ -81,9 +156,7 @@ void CodeGen::InitPutFloat()
     }*/
 
     // https://stackoverflow.com/questions/35526075/llvm-how-to-implement-print-function-in-my-language
-    /*FunctionCallee CalleeF = */TheModule->getOrInsertFunction("printf",
-        FunctionType::get(IntegerType::getInt32Ty(*TheContext), PointerType::get(Type::getInt8Ty(*TheContext), 0), true /* this is var arg func type*/)
-    );
+    TheModule->getOrInsertFunction("printf", FunctionType::get(IntegerType::getInt32Ty(*TheContext), PointerType::get(Type::getInt8Ty(*TheContext), 0), true));
 }
 
 Value *CodeGen::BoolExpr(bool value)

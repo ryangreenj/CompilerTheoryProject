@@ -348,3 +348,4 @@ healthchecksdb
 a.out
 test.ll
 test.o
+*.dll

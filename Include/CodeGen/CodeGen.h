@@ -15,7 +15,7 @@ public:
     static void InitCodeGen();
     static void EndCodeGen();
     static void Print();
-    static void Out();
+    static void Out(std::string outFileName);
 
     static void InitPutFloat();
 

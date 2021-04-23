@@ -16,7 +16,7 @@ int main(int argc, char* args[])
     llvm::LLVMContext context;
     int error = ERROR_NONE;
 
-    if (argc == 2)
+    if (argc == 3)
     {
         Lexer *l = new Lexer(args[1]);
         Parser *p = new Parser(l);
@@ -27,12 +27,16 @@ int main(int argc, char* args[])
         if (tree)
         {
             //ParseTree::PrintTree(std::cout, tree);
-            CodeGen::Out();
+            CodeGen::Out(args[2]);
         }
         else
         {
             Error::PrintAllErrors(std::cout);
         }
+    }
+    else
+    {
+        std::cout << "Invalid arguments, should be: ./Compiler [InFileName] [OutFileName]\n";
     }
 
     return error;
