@@ -8,4 +8,10 @@ Build the project using the following command:
 
 Then run the resulting output using:
 
-`./Compiler`
+`./Compiler [SourceFilename]`
+
+`llc -filetype=obj test.ll`
+
+`gcc -no-pie test.o`
+
+`./a.out`

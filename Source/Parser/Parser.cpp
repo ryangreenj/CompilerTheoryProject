@@ -43,7 +43,8 @@ static bool IsReservedWord(std::string in)
 Parser::Parser(Lexer *lexerIn)
 {
     m_lexer = lexerIn;
-    m_symbolTable = new SymbolTable();
+    //m_symbolTable = new SymbolTable();
+    SymbolTable::InitSymbolTable();
 
     // ADD RUNTIME PROCEDURES INTO SYMBOL TABLE
     auto boolVec = { ValueType::BOOL };
@@ -51,19 +52,23 @@ Parser::Parser(Lexer *lexerIn)
     auto doubleVec = { ValueType::DOUBLE };
     auto stringVec = { ValueType::STRING };
 
-    m_symbolTable->InsertGlobal("getbool", ValueType::BOOL, true, 0);
-    m_symbolTable->InsertGlobal("getinteger", ValueType::INT, true, 0);
-    m_symbolTable->InsertGlobal("getfloat", ValueType::DOUBLE, true, 0);
-    m_symbolTable->InsertGlobal("getstring", ValueType::STRING, true, 0);
-    m_symbolTable->InsertGlobal("putbool", ValueType::BOOL, true, 0, boolVec);
-    m_symbolTable->InsertGlobal("putinteger", ValueType::BOOL, true, 0, intVec);
-    m_symbolTable->InsertGlobal("putfloat", ValueType::BOOL, true, 0, doubleVec);
-    m_symbolTable->InsertGlobal("putstring", ValueType::BOOL, true, 0, stringVec);
-    m_symbolTable->InsertGlobal("sqrt", ValueType::DOUBLE, true, 0, intVec);
+    SymbolTable::InsertGlobal("getbool", ValueType::BOOL, true, 0);
+    SymbolTable::InsertGlobal("getinteger", ValueType::INT, true, 0);
+    SymbolTable::InsertGlobal("getfloat", ValueType::DOUBLE, true, 0);
+    SymbolTable::InsertGlobal("getstring", ValueType::STRING, true, 0);
+    SymbolTable::InsertGlobal("putbool", ValueType::BOOL, true, 0, boolVec);
+    SymbolTable::InsertGlobal("putinteger", ValueType::BOOL, true, 0, intVec);
+    SymbolTable::InsertGlobal("putfloat", ValueType::BOOL, true, 0, doubleVec);
+    SymbolTable::InsertGlobal("putstring", ValueType::BOOL, true, 0, stringVec);
+    SymbolTable::InsertGlobal("sqrt", ValueType::DOUBLE, true, 0, intVec);
+
+    SymbolTable::InsertGlobal("printf", ValueType::INT, true, 0);
 }
 
 ParseNodeP Parser::Parse()
 {
+    CodeGen::InitCodeGen();
+
     TokenP currToken = new Token();
     m_lexer->GetNextToken(currToken);
 
@@ -74,6 +79,10 @@ ParseNodeP Parser::Parse()
     {
         Error::ReportError(error, currToken);
     }
+
+    CodeGen::EndCodeGen();
+
+    CodeGen::Print();
 
     return error == ERROR_NONE ? nextNode : nullptr;
 }
@@ -277,7 +286,7 @@ ERROR_TYPE Parser::ProcedureDeclaration(TokenPR currToken, ParseNodePR nodeOut, 
     nextNode = nullptr;
     REQ_PARSE(ProcedureBody(currToken, nextNode, true));
 
-    RET_IF_ERR(m_symbolTable->DeleteLevel()); // Delete scope after the procedure body
+    RET_IF_ERR(SymbolTable::DeleteLevel()); // Delete scope after the procedure body
 
     return ERROR_NONE;
 }
@@ -309,7 +318,7 @@ ERROR_TYPE Parser::VariableDeclaration(TokenPR currToken, ParseNodePR nodeOut, b
 
             nodeOut->valueType = nodeType;
 
-            if (currToken->type == T_LSQBRACKET)
+            if (currToken->type == T_LSQBRACKET) // TODO: Codegen array type
             {
                 NEXT_TOKEN;
 
@@ -325,11 +334,11 @@ ERROR_TYPE Parser::VariableDeclaration(TokenPR currToken, ParseNodePR nodeOut, b
 
                 if (hasGlobal)
                 {
-                    RET_IF_ERR(m_symbolTable->InsertGlobal(ident, nodeType, false, bound));
+                    RET_IF_ERR(SymbolTable::InsertGlobal(ident, nodeType, false, bound));
                 }
                 else
                 {
-                    RET_IF_ERR(m_symbolTable->Insert(ident, nodeType, false, bound));
+                    RET_IF_ERR(SymbolTable::Insert(ident, nodeType, false, bound));
                 }
 
                 if (currToken->type == T_RSQBRACKET)
@@ -343,12 +352,14 @@ ERROR_TYPE Parser::VariableDeclaration(TokenPR currToken, ParseNodePR nodeOut, b
             // Insert into symbol table
             if (hasGlobal)
             {
-                RET_IF_ERR(m_symbolTable->InsertGlobal(ident, nodeType, false, 0));
+                RET_IF_ERR(SymbolTable::InsertGlobal(ident, nodeType, false, 0));
             }
             else
             {
-                RET_IF_ERR(m_symbolTable->Insert(ident, nodeType, false, 0));
+                RET_IF_ERR(SymbolTable::Insert(ident, nodeType, false, 0));
             }
+
+            nodeOut->IRVal = CodeGen::VariableDeclaration(ident, nodeType, hasGlobal);
 
             return ERROR_NONE;
         }
@@ -447,7 +458,7 @@ ERROR_TYPE Parser::ProcedureHeader(TokenPR currToken, ParseNodePR nodeOut, bool 
                 NEXT_TOKEN;
 
                 // Create new level of scope now for parameters and everything else
-                RET_IF_ERR(m_symbolTable->AddLevel());
+                RET_IF_ERR(SymbolTable::AddLevel());
 
                 nextNode = nullptr;
                 TRY_PARSE(ParameterList(currToken, nextNode)); // Optional
@@ -484,11 +495,11 @@ ERROR_TYPE Parser::ProcedureHeader(TokenPR currToken, ParseNodePR nodeOut, bool 
                 // Add procedure name to symbol table
                 if (hasGlobal)
                 {
-                    RET_IF_ERR(m_symbolTable->InsertGlobal(ident, procedureReturnType, true, 0, paramTypes));
+                    RET_IF_ERR(SymbolTable::InsertGlobal(ident, procedureReturnType, true, 0, paramTypes));
                 }
                 else
                 {
-                    RET_IF_ERR(m_symbolTable->InsertUp(ident, procedureReturnType, true, 0, paramTypes));
+                    RET_IF_ERR(SymbolTable::InsertUp(ident, procedureReturnType, true, 0, paramTypes));
                 }
 
                 llvm::Type *IRProcReturnType = nullptr;
@@ -664,6 +675,7 @@ ERROR_TYPE Parser::AssignmentStatement(TokenPR currToken, ParseNodePR nodeOut, b
     ParseNodeP nextNode = nullptr;
     REQ_PARSE(Destination(currToken, nextNode, required));
 
+    std::string ident = std::get<std::string>(nextNode->children[0]->token->value);
     ValueType destType = nextNode->valueType;
 
     if (currToken->type == T_ASSIGN)
@@ -685,7 +697,9 @@ ERROR_TYPE Parser::AssignmentStatement(TokenPR currToken, ParseNodePR nodeOut, b
             return ERROR_MISMATCHED_TYPES;
         }
 
-        return error;
+        nodeOut->IRVal = CodeGen::AssignmentStatement(ident, nextNode->IRVal);
+
+        return ERROR_NONE;
     }
     else
     {
@@ -864,7 +878,7 @@ ERROR_TYPE Parser::Destination(TokenPR currToken, ParseNodePR nodeOut, bool requ
 
     
     Symbol *destinationSymbol = nullptr;
-    m_symbolTable->Lookup(std::get<std::string>(nextNode->token->value), destinationSymbol);
+    SymbolTable::Lookup(std::get<std::string>(nextNode->token->value), destinationSymbol);
 
     if (!destinationSymbol)
     {
@@ -1353,7 +1367,7 @@ ERROR_TYPE Parser::ProcedureCallOrName(TokenPR currToken, ParseNodePR nodeOut, b
         NEXT_TOKEN;
 
         Symbol *procedureSymbol = nullptr;
-        m_symbolTable->Lookup(std::get<std::string>(nextNode->token->value), procedureSymbol);
+        SymbolTable::Lookup(std::get<std::string>(nextNode->token->value), procedureSymbol);
 
         if (!procedureSymbol)
         {
@@ -1367,7 +1381,14 @@ ERROR_TYPE Parser::ProcedureCallOrName(TokenPR currToken, ParseNodePR nodeOut, b
 
         std::vector<llvm::Value *> ArgIRVals;
 
-        if (nextNode) // Check arguments
+        if (procedureSymbol->identifier.compare("printf") == 0) // TODO: Remove testing
+        {
+            for (int i = 0; i < nextNode->children.size(); ++i)
+            {
+                ArgIRVals.push_back(nextNode->children[i]->IRVal);
+            }
+        }
+        else if (nextNode) // Check arguments
         {
             if (nextNode->children.size() != procedureSymbol->functionParameterTypes.size())
             {
@@ -1384,6 +1405,8 @@ ERROR_TYPE Parser::ProcedureCallOrName(TokenPR currToken, ParseNodePR nodeOut, b
             }
         }
 
+        nodeOut->IRVal = CodeGen::ProcedureCall(procedureSymbol->identifier, ArgIRVals);
+
         if (currToken->type == T_RPAREN)
         {
             NEXT_TOKEN;
@@ -1396,7 +1419,7 @@ ERROR_TYPE Parser::ProcedureCallOrName(TokenPR currToken, ParseNodePR nodeOut, b
         nodeOut->type = NodeType::NAME;
 
         Symbol *nameSymbol = nullptr;
-        m_symbolTable->Lookup(std::get<std::string>(nextNode->token->value), nameSymbol);
+        SymbolTable::Lookup(std::get<std::string>(nextNode->token->value), nameSymbol);
 
         if (!nameSymbol)
         {
@@ -1448,7 +1471,7 @@ ERROR_TYPE Parser::Name(TokenPR currToken, ParseNodePR nodeOut, bool required)
     REQ_PARSE(Identifier(currToken, nextNode, required));
 
     Symbol *nameSymbol = nullptr;
-    m_symbolTable->Lookup(std::get<std::string>(nextNode->token->value), nameSymbol);
+    SymbolTable::Lookup(std::get<std::string>(nextNode->token->value), nameSymbol);
 
     if (!nameSymbol)
     {
@@ -1525,6 +1548,10 @@ ERROR_TYPE Parser::String(TokenPR currToken, ParseNodePR nodeOut, bool required)
     if (currToken->type == T_STRINGCONST)
     {
         nodeOut->token = currToken;
+
+        nodeOut->valueType = ValueType::STRING;
+        nodeOut->IRVal = CodeGen::StringExpr(std::get<std::string>(nodeOut->token->value));
+
         NEXT_TOKEN;
         return ERROR_NONE;
     }

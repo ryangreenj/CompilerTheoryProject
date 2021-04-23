@@ -1,6 +1,7 @@
 #include <iostream>
 #include <string>
 
+#include "CodeGen/CodeGen.h"
 #include "Lexer/Lexer.h"
 #include "Parser/Parser.h"
 #include "Utilities/Error.h"
@@ -25,7 +26,8 @@ int main(int argc, char* args[])
 
         if (tree)
         {
-            ParseTree::PrintTree(std::cout, tree);
+            //ParseTree::PrintTree(std::cout, tree);
+            CodeGen::Out();
         }
         else
         {

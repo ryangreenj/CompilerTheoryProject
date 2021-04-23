@@ -53,7 +53,10 @@ bool TableNode::RemoveSymbol(std::string identifier)
 
 // SymbolTable
 
-SymbolTable::SymbolTable()
+static TableNode *m_head;
+static TableNode *m_global;
+
+void SymbolTable::InitSymbolTable()
 {
     m_head = nullptr;
     m_global = new TableNode();
@@ -209,4 +212,32 @@ ERROR_TYPE SymbolTable::DeleteLevel()
         return ERROR_NONE;
     }
     return ERROR_NO_TABLE;
+}
+
+llvm::AllocaInst *SymbolTable::GetIRAllocaInst(std::string identifier)
+{
+    Symbol *s = nullptr;
+    Lookup(identifier, s);
+    if (s)
+    {
+        return s->IRAllocaInst;
+    }
+    else
+    {
+        return nullptr;
+    }
+}
+
+void SymbolTable::SetIRAllocaInst(std::string identifier, llvm::AllocaInst *IRAllocaInst)
+{
+    Symbol *s = nullptr;
+    Lookup(identifier, s);
+    if (s)
+    {
+        s->IRAllocaInst = IRAllocaInst;
+    }
+    else
+    {
+        return; // Throw error probably
+    }
 }

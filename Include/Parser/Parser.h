@@ -14,7 +14,6 @@ public:
     ParseNodeP Parse();
 private:
     Lexer *m_lexer;
-    SymbolTable *m_symbolTable;
 
     ERROR_TYPE Program(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE TESTED
     ERROR_TYPE ProgramHeader(TokenPR currToken, ParseNodePR nodeOut, bool required = false); // DONE TESTED
