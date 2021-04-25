@@ -39,8 +39,6 @@ static std::unique_ptr<IRBuilder<>> Builder;
 
 static std::stack<BasicBlock *> Blocks;
 
-//static std::map<std::string, Value *> NamedValues;
-
 const int NUM_BITS = 32;
 
 // Create an alloca in global entry block
@@ -399,10 +397,64 @@ Value *CodeGen::AssignmentStatement(std::string name, Value *RHS)
 
 Value *CodeGen::ReturnStatement(Value *RHS)
 {
-    AllocaInst *RetAllocaInst = SymbolTable::GetReturnAllocaInst();
+    //AllocaInst *RetAllocaInst = SymbolTable::GetReturnAllocaInst();
 
-    Builder->CreateStore(RHS, RetAllocaInst);
+    //Builder->CreateStore(RHS, RetAllocaInst);
+    Builder->CreateRet(RHS);
     return RHS;
+}
+
+void CodeGen::IfStatement(Value *Condition, BasicBlock *&ThenBBOut, BasicBlock *&ElseBBOut, BasicBlock *&MergeBBOut, Function *&TheFunctionOut)
+{
+    if (!Condition)
+    {
+        // TODO: Probably throw error
+        return;
+    }
+
+    if (Condition->getType()->isFloatingPointTy()) // If it's a float
+    {
+        Condition = Builder->CreateFCmpONE(Condition, FloatExpr(0.0), "ifcond");
+    }
+    else if (Condition->getType()->isIntegerTy()) // Int or bool
+    {
+        Condition = Builder->CreateICmpNE(Condition, IntExpr(0), "ifcond");
+    }
+
+    TheFunctionOut = Builder->GetInsertBlock()->getParent();
+
+    ThenBBOut = BasicBlock::Create(*TheContext, "then", TheFunctionOut);
+    ElseBBOut = BasicBlock::Create(*TheContext, "else");
+    MergeBBOut = BasicBlock::Create(*TheContext, "ifcont");
+
+    Builder->CreateCondBr(Condition, ThenBBOut, ElseBBOut);
+
+    Builder->SetInsertPoint(ThenBBOut);
+
+    // Codegen if then statements
+}
+
+void CodeGen::ElseStatement(BasicBlock *&ThenBBOut, BasicBlock *&ElseBBOut, BasicBlock *&MergeBBOut, Function *&TheFunctionOut)
+{
+    Builder->CreateBr(MergeBBOut);
+    ThenBBOut = Builder->GetInsertBlock();
+
+    TheFunctionOut->getBasicBlockList().push_back(ElseBBOut);
+    Builder->SetInsertPoint(ElseBBOut);
+
+    // Codegen else statements
+}
+
+void CodeGen::EndIfStatement(BasicBlock *ThenBB, BasicBlock *ElseBB, BasicBlock *MergeBB, Function *TheFunction)
+{
+    Builder->CreateBr(MergeBB);
+
+    ElseBB = Builder->GetInsertBlock();
+
+    TheFunction->getBasicBlockList().push_back(MergeBB);
+    Builder->SetInsertPoint(MergeBB);
+
+    // TODO: Check if PHI node is needed
 }
 
 
@@ -461,7 +513,7 @@ Function *CodeGen::ProcedureDeclaration(Function *F, ValueType retType)
     }
     
     // Allocate return value and set in symbol table
-    Value *InitVal = nullptr;
+    /*Value *InitVal = nullptr;
     Type *T = nullptr;
     GetTypeAndInitVal(retType, InitVal, T);
 
@@ -471,7 +523,7 @@ Function *CodeGen::ProcedureDeclaration(Function *F, ValueType retType)
 
     Builder->CreateStore(InitVal, Alloca);
 
-    SymbolTable::SetReturnAllocaInst(Alloca);
+    SymbolTable::SetReturnAllocaInst(Alloca);*/
 
     // TODO: Return logic, probably split this out into procedure body gen
 
@@ -482,9 +534,10 @@ Function *CodeGen::ProcedureDeclaration(Function *F, ValueType retType)
 
 Function *CodeGen::ProcedureEnd(Function *F)
 {
-    if (AllocaInst *RetAllocaInst = SymbolTable::GetReturnAllocaInst())
+    // TODO: Better condition here
+    if (F) //if (AllocaInst *RetAllocaInst = SymbolTable::GetReturnAllocaInst())
     {
-        Builder->CreateRet(RetAllocaInst);
+        //Builder->CreateRet(RetAllocaInst);
 
         verifyFunction(*F);
 

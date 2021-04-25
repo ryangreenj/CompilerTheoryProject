@@ -6,7 +6,7 @@
 TableNode::TableNode(TableNode *next)
 {
     this->m_next = next;
-    this->m_returnAllocaInst = nullptr;
+    //this->m_returnAllocaInst = nullptr;
 }
 
 TableNode::~TableNode()
@@ -15,7 +15,7 @@ TableNode::~TableNode()
     {
         delete s;
     }
-    m_returnAllocaInst = nullptr;
+    //m_returnAllocaInst = nullptr;
 }
 
 void TableNode::AddSymbol(Symbol *toAdd)
@@ -52,15 +52,15 @@ bool TableNode::RemoveSymbol(std::string identifier)
     return false;
 }
 
-llvm::AllocaInst *TableNode::GetReturnAllocaInst()
-{
-    return m_returnAllocaInst;
-}
-
-void TableNode::SetReturnAllocaInst(llvm::AllocaInst *al)
-{
-    m_returnAllocaInst = al;
-}
+//llvm::AllocaInst *TableNode::GetReturnAllocaInst()
+//{
+//    return m_returnAllocaInst;
+//}
+//
+//void TableNode::SetReturnAllocaInst(llvm::AllocaInst *al)
+//{
+//    m_returnAllocaInst = al;
+//}
 
 
 
@@ -255,12 +255,12 @@ void SymbolTable::SetIRAllocaInst(std::string identifier, llvm::AllocaInst *IRAl
     }
 }
 
-llvm::AllocaInst *SymbolTable::GetReturnAllocaInst()
-{
-    return m_head->GetReturnAllocaInst();
-}
-
-void SymbolTable::SetReturnAllocaInst(llvm::AllocaInst *al)
-{
-    m_head->SetReturnAllocaInst(al);
-}
+//llvm::AllocaInst *SymbolTable::GetReturnAllocaInst()
+//{
+//    return m_head->GetReturnAllocaInst();
+//}
+//
+//void SymbolTable::SetReturnAllocaInst(llvm::AllocaInst *al)
+//{
+//    m_head->SetReturnAllocaInst(al);
+//}

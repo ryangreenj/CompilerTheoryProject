@@ -744,6 +744,12 @@ ERROR_TYPE Parser::IfStatement(TokenPR currToken, ParseNodePR nodeOut, bool requ
     }
     NEXT_TOKEN;
 
+    // Codegen if header
+    llvm::BasicBlock *ThenBB = nullptr, *ElseBB = nullptr, *MergeBB = nullptr;
+    llvm::Function *TheFunction = nullptr;
+
+    CodeGen::IfStatement(nextNode->IRVal, ThenBB, ElseBB, MergeBB, TheFunction);
+
     if (!IS_CERTAIN_WORD(currToken, "then"))
     {
         return ERROR_INVALID_IF_STATEMENT;
@@ -752,6 +758,8 @@ ERROR_TYPE Parser::IfStatement(TokenPR currToken, ParseNodePR nodeOut, bool requ
 
     nextNode = nullptr;
     TRY_PARSE_MULTI(Statement(currToken, nextNode));
+
+    CodeGen::ElseStatement(ThenBB, ElseBB, MergeBB, TheFunction);
 
     if (IS_CERTAIN_WORD(currToken, "else"))
     {
@@ -765,6 +773,8 @@ ERROR_TYPE Parser::IfStatement(TokenPR currToken, ParseNodePR nodeOut, bool requ
         nextNode = nullptr;
         TRY_PARSE_MULTI(Statement(currToken, nextNode));
     }
+
+    CodeGen::EndIfStatement(ThenBB, ElseBB, MergeBB, TheFunction);
 
     if (IS_CERTAIN_WORD(currToken, "end"))
     {

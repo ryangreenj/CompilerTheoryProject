@@ -33,6 +33,9 @@ public:
     static llvm::Value *VariableDeclaration(std::string name, ValueType type, bool hasGlobal = false);
     static llvm::Value *AssignmentStatement(std::string name, llvm::Value *RHS);
     static llvm::Value *ReturnStatement(llvm::Value *RHS);
+    static void IfStatement(llvm::Value *Condition, llvm::BasicBlock *&ThenBBOut, llvm::BasicBlock *&ElseBBOut, llvm::BasicBlock *&MergeBBOut, llvm::Function *&TheFunctionOut);
+    static void ElseStatement(llvm::BasicBlock *&ThenBBOut, llvm::BasicBlock *&ElseBBOut, llvm::BasicBlock *&MergeBBOut, llvm::Function *&TheFunctionOut);
+    static void EndIfStatement(llvm::BasicBlock *ThenBB, llvm::BasicBlock *ElseBB, llvm::BasicBlock *MergeBB, llvm::Function *TheFunction);
 
     static llvm::Type *BoolType();
     static llvm::Type *IntType();
