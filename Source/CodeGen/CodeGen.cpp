@@ -37,6 +37,8 @@ static std::unique_ptr<LLVMContext> TheContext;
 static std::unique_ptr<Module> TheModule;
 static std::unique_ptr<IRBuilder<>> Builder;
 
+static std::stack<BasicBlock *> Blocks;
+
 //static std::map<std::string, Value *> NamedValues;
 
 const int NUM_BITS = 32;
@@ -54,6 +56,43 @@ static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction, const std::stri
     return TmpB.CreateAlloca(VarType, 0, VarName.c_str());
 }
 
+static void SetBasicBlock(BasicBlock *BB)
+{
+    Blocks.push(BB);
+    Builder->SetInsertPoint(BB);
+}
+
+static void EndBasicBlock()
+{
+    Blocks.pop();
+    Builder->SetInsertPoint(Blocks.top());
+}
+
+void CodeGen::GetTypeAndInitVal(ValueType type, Value *&InitValOut, Type *&TypeOut)
+{
+    switch (type)
+    {
+    case ValueType::BOOL:
+        InitValOut = BoolExpr(false);
+        TypeOut = BoolType();
+        break;
+    case ValueType::INT:
+        InitValOut = IntExpr(0);
+        TypeOut = IntType();
+        break;
+    case ValueType::DOUBLE:
+        InitValOut = FloatExpr(0.0);
+        TypeOut = DoubleType();
+        break;
+    case ValueType::STRING:
+        InitValOut = StringExpr("");
+        TypeOut = StringType();
+        break;
+    default:
+        break; // TODO: Arrays
+    }
+}
+
 void CodeGen::InitCodeGen()
 {
     TheContext = std::make_unique<LLVMContext>();
@@ -66,7 +105,7 @@ void CodeGen::InitCodeGen()
     Function *F = Function::Create(FT, Function::ExternalLinkage, "main", TheModule.get());
 
     BasicBlock *BB = BasicBlock::Create(*TheContext, "program", F);
-    Builder->SetInsertPoint(BB);
+    SetBasicBlock(BB);
 
     InitPutFloat();
 }
@@ -302,25 +341,7 @@ Value *CodeGen::VariableDeclaration(std::string name, ValueType type, bool hasGl
 {
     Value *InitVal = nullptr;
     Type *T = nullptr;
-    switch (type)
-    {
-    case ValueType::BOOL:
-        InitVal = BoolExpr(false);
-        T = BoolType();
-        break;
-    case ValueType::INT:
-        InitVal = IntExpr(0);
-        T = IntType();
-        break;
-    case ValueType::DOUBLE:
-        InitVal = FloatExpr(0.0);
-        T = DoubleType();
-        break;
-    case ValueType::STRING: // TODO
-        break;
-    default:
-        break;
-    }
+    GetTypeAndInitVal(type, InitVal, T);
 
     AllocaInst *Alloca = nullptr;
 
@@ -357,12 +378,13 @@ Value *CodeGen::VariableDeclaration(std::string name, ValueType type, bool hasGl
 
     Builder->CreateStore(InitVal, Alloca);
 
+    // TODO: Use hasGlobal
     SymbolTable::SetIRAllocaInst(name, Alloca);
 
     return Alloca;
 }
 
-Value *CodeGen::AssignmentStatement(std::string name, llvm::Value *RHS)
+Value *CodeGen::AssignmentStatement(std::string name, Value *RHS)
 {
     Value *V = SymbolTable::GetIRAllocaInst(name);
 
@@ -372,6 +394,14 @@ Value *CodeGen::AssignmentStatement(std::string name, llvm::Value *RHS)
     }
 
     Builder->CreateStore(RHS, V);
+    return RHS;
+}
+
+Value *CodeGen::ReturnStatement(Value *RHS)
+{
+    AllocaInst *RetAllocaInst = SymbolTable::GetReturnAllocaInst();
+
+    Builder->CreateStore(RHS, RetAllocaInst);
     return RHS;
 }
 
@@ -394,7 +424,7 @@ Type *CodeGen::DoubleType()
 
 Type *CodeGen::StringType()
 {
-    return nullptr;
+    return Type::getInt8PtrTy(*TheContext);
 }
 
 
@@ -403,7 +433,7 @@ Function *CodeGen::ProcedureHeader(std::string name, Type *retType, std::vector<
 {
     FunctionType *FT = FunctionType::get(retType, argTypes, false);
 
-    Function *F = Function::Create(FT, Function::ExternalLinkage, name, TheModule.get()); // TODO: Change ExternalLinkage for scoping
+    Function *F = Function::Create(FT, Function::ExternalLinkage, name, TheModule.get()); // TODO: Change ExternalLinkage for scoping or maybe not
 
     // Set names of arguments
     int i = 0;
@@ -415,11 +445,11 @@ Function *CodeGen::ProcedureHeader(std::string name, Type *retType, std::vector<
     return F;
 }
 
-Function *CodeGen::ProcedureDeclaration(Function *F)
+Function *CodeGen::ProcedureDeclaration(Function *F, ValueType retType)
 {
     // Create basic block to start insertion into
     BasicBlock *BB = BasicBlock::Create(*TheContext, "entry", F);
-    Builder->SetInsertPoint(BB);
+    SetBasicBlock(BB);
 
     // Insert function arguments into NamedValues map, might need to clear
     for (auto &Arg : F->args())
@@ -429,10 +459,42 @@ Function *CodeGen::ProcedureDeclaration(Function *F)
 
         SymbolTable::SetIRAllocaInst(std::string(Arg.getName()), Alloca);
     }
+    
+    // Allocate return value and set in symbol table
+    Value *InitVal = nullptr;
+    Type *T = nullptr;
+    GetTypeAndInitVal(retType, InitVal, T);
+
+    AllocaInst *Alloca = nullptr;
+
+    Alloca = CreateEntryBlockAlloca(F, "RET", T);
+
+    Builder->CreateStore(InitVal, Alloca);
+
+    SymbolTable::SetReturnAllocaInst(Alloca);
 
     // TODO: Return logic, probably split this out into procedure body gen
 
     //verifyFunction(*F);
 
     return F;
+}
+
+Function *CodeGen::ProcedureEnd(Function *F)
+{
+    if (AllocaInst *RetAllocaInst = SymbolTable::GetReturnAllocaInst())
+    {
+        Builder->CreateRet(RetAllocaInst);
+
+        verifyFunction(*F);
+
+        EndBasicBlock();
+
+        return F;
+    }
+
+    // Can't read body, remove the function
+    F->eraseFromParent();
+    EndBasicBlock();
+    return nullptr;
 }

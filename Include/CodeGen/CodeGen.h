@@ -32,6 +32,7 @@ public:
     static llvm::Value *ProcedureCall(std::string name, std::vector<llvm::Value *> args);
     static llvm::Value *VariableDeclaration(std::string name, ValueType type, bool hasGlobal = false);
     static llvm::Value *AssignmentStatement(std::string name, llvm::Value *RHS);
+    static llvm::Value *ReturnStatement(llvm::Value *RHS);
 
     static llvm::Type *BoolType();
     static llvm::Type *IntType();
@@ -39,9 +40,10 @@ public:
     static llvm::Type *StringType();
 
     static llvm::Function *ProcedureHeader(std::string name, llvm::Type *retType, std::vector<std::string> argNames, std::vector<llvm::Type *> argTypes);
-    static llvm::Function *ProcedureDeclaration(llvm::Function *F);
+    static llvm::Function *ProcedureDeclaration(llvm::Function *F, ValueType retType);
+    static llvm::Function *ProcedureEnd(llvm::Function *F);
 private:
-    
+    static void GetTypeAndInitVal(ValueType type, llvm::Value *&InitValOut, llvm::Type *&TypeOut);
 };
 
 #endif

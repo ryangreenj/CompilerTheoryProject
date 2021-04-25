@@ -281,10 +281,14 @@ ERROR_TYPE Parser::ProcedureDeclaration(TokenPR currToken, ParseNodePR nodeOut, 
     ParseNodeP nextNode = nullptr;
     REQ_PARSE(ProcedureHeader(currToken, nextNode, false, hasGlobal));
 
-    CodeGen::ProcedureDeclaration(nextNode->IRFunction);
+    llvm::Function *F = nextNode->IRFunction;
+
+    CodeGen::ProcedureDeclaration(F, nextNode->children[1]->valueType); // children[1] is TypeMark
 
     nextNode = nullptr;
     REQ_PARSE(ProcedureBody(currToken, nextNode, true));
+
+    nodeOut->IRFunction = CodeGen::ProcedureEnd(F);
 
     RET_IF_ERR(SymbolTable::DeleteLevel()); // Delete scope after the procedure body
 
@@ -469,8 +473,12 @@ ERROR_TYPE Parser::ProcedureHeader(TokenPR currToken, ParseNodePR nodeOut, bool 
                 {
                     for (ParseNodeP param : nextNode->children)
                     {
+                        std::string ident = std::get<std::string>(param->token->value);
+
                         paramTypes.push_back(param->valueType);
-                        paramNames.push_back(std::get<std::string>(param->token->value));
+                        paramNames.push_back(ident);
+
+                        SymbolTable::Insert(ident, param->valueType, false, 0);
 
                         switch (param->valueType)
                         {
@@ -838,6 +846,8 @@ ERROR_TYPE Parser::ReturnStatement(TokenPR currToken, ParseNodePR nodeOut, bool 
 
     ParseNodeP nextNode = nullptr;
     REQ_PARSE(Expression(currToken, nextNode, true));
+
+    nodeOut->IRVal = CodeGen::ReturnStatement(nextNode->IRVal);
 
     return ERROR_NONE;
 }
