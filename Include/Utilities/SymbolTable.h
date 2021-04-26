@@ -28,6 +28,7 @@ enum class ValueType
 struct Symbol
 {
     std::string identifier;
+    std::string realProcedureName;
     ValueType type;
     bool isFunction = false;
     std::variant<std::string, int, double> value = 0;
@@ -67,6 +68,7 @@ public:
     static ERROR_TYPE InsertUp(std::string identifier, ValueType type, bool isFunction, std::variant<std::string, int, double> value, std::vector<ValueType> functionParameterTypes = std::vector<ValueType>());
     static ERROR_TYPE InsertGlobal(std::string identifier, ValueType type, bool isFunction, std::variant<std::string, int, double> value, std::vector<ValueType> functionParameterTypes = std::vector<ValueType>());
     static ERROR_TYPE Lookup(std::string identifier, Symbol *&symbolOut, bool checkGlobal = true);
+    static ERROR_TYPE LookupUp(std::string identifier, Symbol *&symbolOut, bool checkGlobal = true);
     static ERROR_TYPE LookupGlobal(std::string identifier, Symbol *&symbolOut);
     static ERROR_TYPE Remove(std::string identifier);
     static ERROR_TYPE RemoveGlobal(std::string identifier);
@@ -76,6 +78,9 @@ public:
 
     //static llvm::AllocaInst *GetReturnAllocaInst();
     //static void SetReturnAllocaInst(llvm::AllocaInst *al);
+
+    static std::string GetRealProcedureName(std::string identifier);
+    static void SetRealProcedureName(std::string identifier, std::string realName);
 
     static ERROR_TYPE AddLevel();
     static ERROR_TYPE DeleteLevel();

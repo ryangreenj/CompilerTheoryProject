@@ -283,7 +283,7 @@ ERROR_TYPE Parser::ProcedureDeclaration(TokenPR currToken, ParseNodePR nodeOut, 
 
     llvm::Function *F = nextNode->IRFunction;
 
-    CodeGen::ProcedureDeclaration(F, nextNode->children[1]->valueType); // children[1] is TypeMark
+    CodeGen::ProcedureDeclaration(F);
 
     nextNode = nullptr;
     REQ_PARSE(ProcedureBody(currToken, nextNode, true));
@@ -363,7 +363,7 @@ ERROR_TYPE Parser::VariableDeclaration(TokenPR currToken, ParseNodePR nodeOut, b
                 RET_IF_ERR(SymbolTable::Insert(ident, nodeType, false, 0));
             }
 
-            nodeOut->IRVal = CodeGen::VariableDeclaration(ident, nodeType, hasGlobal);
+            CodeGen::VariableDeclaration(ident, nodeType, hasGlobal);
 
             return ERROR_NONE;
         }
@@ -816,6 +816,12 @@ ERROR_TYPE Parser::LoopStatement(TokenPR currToken, ParseNodePR nodeOut, bool re
     }
     NEXT_TOKEN;
 
+    // Codegen for header
+    llvm::BasicBlock *ForCheckBB = nullptr, *LoopBB = nullptr, *AfterForBB = nullptr;
+    llvm::Function *TheFunction = nullptr;
+
+    CodeGen::ForStatementHeader(ForCheckBB, LoopBB, AfterForBB, TheFunction);
+
     nextNode = nullptr;
     REQ_PARSE(Expression(currToken, nextNode, true));
 
@@ -825,8 +831,13 @@ ERROR_TYPE Parser::LoopStatement(TokenPR currToken, ParseNodePR nodeOut, bool re
     }
     NEXT_TOKEN;
 
+    // Codegen loop instruction
+    CodeGen::ForStatementCheck(nextNode->IRVal, ForCheckBB, LoopBB, AfterForBB, TheFunction);
+
     nextNode = nullptr;
     TRY_PARSE_MULTI(Statement(currToken, nextNode));
+
+    CodeGen::EndForStatement(ForCheckBB, LoopBB, AfterForBB, TheFunction);
 
     if (IS_CERTAIN_WORD(currToken, "end"))
     {

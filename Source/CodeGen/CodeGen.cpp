@@ -39,6 +39,8 @@ static std::unique_ptr<IRBuilder<>> Builder;
 
 static std::stack<BasicBlock *> Blocks;
 
+static bool runtimeGenerated = false;
+
 const int NUM_BITS = 32;
 
 // Create an alloca in global entry block
@@ -66,25 +68,29 @@ static void EndBasicBlock()
     Builder->SetInsertPoint(Blocks.top());
 }
 
-void CodeGen::GetTypeAndInitVal(ValueType type, Value *&InitValOut, Type *&TypeOut)
+void CodeGen::GetTypeAndInitVal(ValueType type, Value *&InitValOut, Type *&TypeOut, int &AlignNum)
 {
     switch (type)
     {
     case ValueType::BOOL:
         InitValOut = BoolExpr(false);
         TypeOut = BoolType();
+        AlignNum = 1;
         break;
     case ValueType::INT:
         InitValOut = IntExpr(0);
         TypeOut = IntType();
+        AlignNum = 4;
         break;
     case ValueType::DOUBLE:
         InitValOut = FloatExpr(0.0);
         TypeOut = DoubleType();
+        AlignNum = 8;
         break;
     case ValueType::STRING:
         InitValOut = StringExpr("");
         TypeOut = StringType();
+        AlignNum = 1;
         break;
     default:
         break; // TODO: Arrays
@@ -98,6 +104,8 @@ void CodeGen::InitCodeGen()
 
     Builder = std::make_unique<IRBuilder<>>(*TheContext);
 
+    runtimeGenerated = false;
+
     FunctionType *FT = FunctionType::get(IntType(), false);
 
     Function *F = Function::Create(FT, Function::ExternalLinkage, "main", TheModule.get());
@@ -105,7 +113,7 @@ void CodeGen::InitCodeGen()
     BasicBlock *BB = BasicBlock::Create(*TheContext, "program", F);
     SetBasicBlock(BB);
 
-    InitPutFloat();
+    Runtime();
 }
 
 void CodeGen::EndCodeGen()
@@ -183,7 +191,7 @@ void CodeGen::Out(std::string outFileName)
 #endif
 }
 
-void CodeGen::InitPutFloat()
+void CodeGen::Runtime()
 {
     // https://stackoverflow.com/questions/30234027/how-to-call-printf-in-llvm-through-the-module-builder-system
     /*Function *func_putFloat = TheModule->getFunction("putfloat");
@@ -193,7 +201,68 @@ void CodeGen::InitPutFloat()
     }*/
 
     // https://stackoverflow.com/questions/35526075/llvm-how-to-implement-print-function-in-my-language
-    TheModule->getOrInsertFunction("printf", FunctionType::get(IntegerType::getInt32Ty(*TheContext), PointerType::get(Type::getInt8Ty(*TheContext), 0), true));
+    TheModule->getOrInsertFunction("printf", FunctionType::get(IntType(), PointerType::get(Type::getInt8Ty(*TheContext), 0), true));
+
+    std::vector<std::string> argNames = { "IN" };
+    Function *F = nullptr;
+
+    // putBool
+    SymbolTable::AddLevel();
+    SymbolTable::Insert("IN", ValueType::BOOL, false, 0);
+    F = ProcedureHeader("putbool", BoolType(), argNames, { BoolType() });
+    ProcedureDeclaration(F);
+    ReturnStatement(ProcedureCall("printf", { StringExpr("%d\n"), VariableExpr("IN") }));
+    ProcedureEnd(F);
+    SymbolTable::DeleteLevel();
+
+    // putInteger
+    SymbolTable::AddLevel();
+    SymbolTable::Insert("IN", ValueType::INT, false, 0);
+    F = ProcedureHeader("putinteger", BoolType(), argNames, { IntType() });
+    ProcedureDeclaration(F);
+    ReturnStatement(ProcedureCall("printf", { StringExpr("%d\n"), VariableExpr("IN") }));
+    ProcedureEnd(F);
+    SymbolTable::DeleteLevel();
+
+    // putFloat
+    SymbolTable::AddLevel();
+    SymbolTable::Insert("IN", ValueType::DOUBLE, false, 0);
+    F = ProcedureHeader("putfloat", BoolType(), argNames, { DoubleType() });
+    ProcedureDeclaration(F);
+    ReturnStatement(ProcedureCall("printf", { StringExpr("%f\n"), VariableExpr("IN") }));
+    ProcedureEnd(F);
+    SymbolTable::DeleteLevel();
+
+    // putString
+    SymbolTable::AddLevel();
+    SymbolTable::Insert("IN", ValueType::STRING, false, 0);
+    F = ProcedureHeader("putstring", BoolType(), argNames, { StringType() });
+    ProcedureDeclaration(F);
+    ReturnStatement(ProcedureCall("printf", { StringExpr("%s\n"), VariableExpr("IN") }));
+    ProcedureEnd(F);
+    SymbolTable::DeleteLevel();
+
+    // sqrt      Tried using C lib sqrt but too many problems, use LLVM intrinsic instead!
+    SymbolTable::AddLevel();
+    SymbolTable::Insert("IN", ValueType::INT, false, 0);
+    F = ProcedureHeader("sqrt", DoubleType(), argNames, { IntType() });
+    ProcedureDeclaration(F);
+
+    std::vector<llvm::Type *> ArgTypes;
+    ArgTypes.push_back(DoubleType());
+
+    Function *SQRTInt = Intrinsic::getDeclaration(F->getParent(), Intrinsic::sqrt, ArgTypes);
+
+    std::vector<llvm::Value *> Args;
+    Args.push_back(ConvertType(DoubleType(), VariableExpr("IN")));
+
+    ReturnStatement(Builder->CreateCall(SQRTInt, Args));
+    ProcedureEnd(F);
+    SymbolTable::DeleteLevel();
+
+    
+
+    runtimeGenerated = true;
 }
 
 Value *CodeGen::BoolExpr(bool value)
@@ -221,16 +290,37 @@ Value *CodeGen::VariableExpr(std::string name)
     AllocaInst *A = SymbolTable::GetIRAllocaInst(name);
     if (!A)
     {
-        ReportError(ERROR_SYMBOL_DOESNT_EXIST);
-    }
+        // Check if it's a global variable
+        GlobalVariable *gVar = TheModule->getNamedGlobal(name);
 
-    // Load value from the stack
-    return Builder->CreateLoad(A->getAllocatedType(), A, name.c_str());
+        if (!gVar)
+        {
+            ReportError(ERROR_SYMBOL_DOESNT_EXIST);
+            return nullptr;
+        }
+        return Builder->CreateLoad(gVar);
+    }
+    else
+    {
+        // Load value from the stack
+        return Builder->CreateLoad(A->getAllocatedType(), A, name.c_str());
+    }
 }
 
 Value *CodeGen::NegateExpr(Value *value)
 {
-    return Builder->CreateNeg(value, "negtmp");
+    if (value->getType()->isIntegerTy())
+    {
+        return Builder->CreateMul(value, IntExpr(-1));
+    }
+    else if (value->getType()->isFloatingPointTy())
+    {
+        return Builder->CreateFMul(value, FloatExpr(-1.0));
+    }
+    else
+    {
+        return nullptr; // TODO: Maybe throw error
+    }
 }
 
 Value *CodeGen::TermExpr(Value *LHS, Value *RHS, TOKEN_TYPE op)
@@ -239,6 +329,9 @@ Value *CodeGen::TermExpr(Value *LHS, Value *RHS, TOKEN_TYPE op)
     {
         return nullptr; // TODO: Maybe throw error
     }
+
+    LHS = ConvertToDouble(LHS);
+    RHS = ConvertToDouble(RHS);
 
     if (op == T_MULTIPLY)
     {
@@ -260,6 +353,9 @@ Value *CodeGen::FactorExpr(Value *LHS, Value *RHS, TOKEN_TYPE op)
     {
         return nullptr; // TODO: Maybe throw error
     }
+
+    LHS = ConvertToDouble(LHS);
+    RHS = ConvertToDouble(RHS);
 
     switch (op)
     {
@@ -287,6 +383,9 @@ Value *CodeGen::ArithOpExpr(Value *LHS, Value *RHS, TOKEN_TYPE op)
         return nullptr; // TODO: Maybe throw error
     }
 
+    LHS = ConvertToDouble(LHS);
+    RHS = ConvertToDouble(RHS);
+
     switch (op)
     {
     case T_ADD:
@@ -305,12 +404,15 @@ Value *CodeGen::ExprExpr(Value *LHS, Value *RHS, TOKEN_TYPE op)
         return nullptr; // TODO: Maybe throw error
     }
 
+    LHS = ConvertToDouble(LHS);
+    RHS = ConvertToDouble(RHS);
+
     switch (op)
     {
-    case T_AND:
-        return nullptr; // TODO: Implement
+    case T_AND: // TODO: Case for strings
+        return Builder->CreateAnd(CheckIfValueTrue(LHS, "andcomp"), CheckIfValueTrue(RHS, "andcomp"), "and");
     case T_OR:
-        return nullptr;
+        return Builder->CreateOr(CheckIfValueTrue(LHS, "orcomp"), CheckIfValueTrue(RHS, "orcomp"), "or");
     default:
         return nullptr; // TODO: Throw error
     }
@@ -318,6 +420,14 @@ Value *CodeGen::ExprExpr(Value *LHS, Value *RHS, TOKEN_TYPE op)
 
 Value *CodeGen::ProcedureCall(std::string name, std::vector<Value *> args)
 {
+    // Get the real full name (if multiple procedures with same name exist in different scopes
+    std::string realName = SymbolTable::GetRealProcedureName(name);
+
+    if (realName.compare("") != 0)
+    {
+        name = realName;
+    }
+
     Function *F = TheModule->getFunction(name);
     if (!F)
     {
@@ -325,61 +435,52 @@ Value *CodeGen::ProcedureCall(std::string name, std::vector<Value *> args)
         return nullptr;
     }
 
-    // Symbol table does this
-    /*if (F->arg_size() != args.size())
+    int i = 0;
+    for (auto &arg : F->args())
     {
-        // TODO: Throw error
-        return nullptr;
-    }*/ 
+        args[i] = ConvertType(arg.getType(), args[i]);
+        ++i;
+    }
 
     return Builder->CreateCall(F, args, "calltmp");
 }
 
-Value *CodeGen::VariableDeclaration(std::string name, ValueType type, bool hasGlobal)
+void CodeGen::VariableDeclaration(std::string name, ValueType type, bool isGlobal)
 {
     Value *InitVal = nullptr;
     Type *T = nullptr;
-    GetTypeAndInitVal(type, InitVal, T);
+    int AlignNum = 0;
+    GetTypeAndInitVal(type, InitVal, T, AlignNum);
 
-    AllocaInst *Alloca = nullptr;
-
-    Function *TheFunction = Builder->GetInsertBlock()->getParent();
-    Alloca = CreateEntryBlockAlloca(TheFunction, name, T);
-
-    /*if (hasGlobal)
+    if (!isGlobal && Blocks.size() == 1) // "Outer function" variables are always inserted globally
     {
-        Alloca = CreateEntryBlockAlloca(name, T);
+        isGlobal = true;
+    }
+
+    if (isGlobal)
+    {
+        TheModule->getOrInsertGlobal(name, T);
+        GlobalVariable *gVar = TheModule->getNamedGlobal(name);
+        gVar->setLinkage(GlobalValue::CommonLinkage);
+
+#ifdef _WIN64
+        gVar->setAlignment(Align(AlignNum));
+#else
+        gVar->setAlignment(AlignNum);
+#endif
+
+        Constant *C = dyn_cast<Constant>(InitVal);
+        gVar->setInitializer(C);
     }
     else
     {
-        BasicBlock *BB = Builder->GetInsertBlock();
+        Function *TheFunction = Builder->GetInsertBlock()->getParent();
+        AllocaInst *Alloca = CreateEntryBlockAlloca(TheFunction, name, T);
 
-        if (!BB)
-        {
-            Alloca = CreateEntryBlockAlloca(name, T);
-        }
-        else
-        {
-            Function *TheFunction = Builder->GetInsertBlock()->getParent();
+        Builder->CreateStore(InitVal, Alloca);
 
-            if (!TheFunction)
-            {
-                Alloca = CreateEntryBlockAlloca(name, T);
-            }
-            else
-            {
-                Alloca = CreateEntryBlockAlloca(TheFunction, name, T);
-            }
-        }
+        SymbolTable::SetIRAllocaInst(name, Alloca);
     }
-    */
-
-    Builder->CreateStore(InitVal, Alloca);
-
-    // TODO: Use hasGlobal
-    SymbolTable::SetIRAllocaInst(name, Alloca);
-
-    return Alloca;
 }
 
 Value *CodeGen::AssignmentStatement(std::string name, Value *RHS)
@@ -388,20 +489,37 @@ Value *CodeGen::AssignmentStatement(std::string name, Value *RHS)
 
     if (!V)
     {
-        // TODO: Throw error
+        // Check if it's a global variable
+        V = TheModule->getNamedGlobal(name);
+        if (!V)
+        {
+            return nullptr; // TODO: Probably throw error
+        }
     }
-
-    Builder->CreateStore(RHS, V);
+    
+    Builder->CreateStore(ConvertType(V, RHS), V);
+        
     return RHS;
 }
 
 Value *CodeGen::ReturnStatement(Value *RHS)
 {
-    //AllocaInst *RetAllocaInst = SymbolTable::GetReturnAllocaInst();
+    Function *TheFunction = Builder->GetInsertBlock()->getParent();
 
-    //Builder->CreateStore(RHS, RetAllocaInst);
-    Builder->CreateRet(RHS);
+    Builder->CreateRet(ConvertType(TheFunction->getReturnType(), RHS));
     return RHS;
+}
+
+Value *CodeGen::CheckIfValueTrue(Value *ValIn, std::string CondName)
+{
+    if (ValIn->getType()->isFloatingPointTy()) // If it's a float
+    {
+        return Builder->CreateFCmpONE(ValIn, FloatExpr(0.0), CondName);
+    }
+    else if (ValIn->getType()->isIntegerTy()) // Int or bool
+    {
+        return Builder->CreateICmpNE(ValIn, BoolExpr(0), CondName);
+    }
 }
 
 void CodeGen::IfStatement(Value *Condition, BasicBlock *&ThenBBOut, BasicBlock *&ElseBBOut, BasicBlock *&MergeBBOut, Function *&TheFunctionOut)
@@ -412,22 +530,13 @@ void CodeGen::IfStatement(Value *Condition, BasicBlock *&ThenBBOut, BasicBlock *
         return;
     }
 
-    if (Condition->getType()->isFloatingPointTy()) // If it's a float
-    {
-        Condition = Builder->CreateFCmpONE(Condition, FloatExpr(0.0), "ifcond");
-    }
-    else if (Condition->getType()->isIntegerTy()) // Int or bool
-    {
-        Condition = Builder->CreateICmpNE(Condition, IntExpr(0), "ifcond");
-    }
-
     TheFunctionOut = Builder->GetInsertBlock()->getParent();
 
     ThenBBOut = BasicBlock::Create(*TheContext, "then", TheFunctionOut);
     ElseBBOut = BasicBlock::Create(*TheContext, "else");
     MergeBBOut = BasicBlock::Create(*TheContext, "ifcont");
 
-    Builder->CreateCondBr(Condition, ThenBBOut, ElseBBOut);
+    Builder->CreateCondBr(CheckIfValueTrue(Condition, "ifcond"), ThenBBOut, ElseBBOut);
 
     Builder->SetInsertPoint(ThenBBOut);
 
@@ -453,8 +562,40 @@ void CodeGen::EndIfStatement(BasicBlock *ThenBB, BasicBlock *ElseBB, BasicBlock 
 
     TheFunction->getBasicBlockList().push_back(MergeBB);
     Builder->SetInsertPoint(MergeBB);
+    
+    // Done
+}
 
-    // TODO: Check if PHI node is needed
+void CodeGen::ForStatementHeader(BasicBlock *&ForCheckBBOut, BasicBlock *&LoopBBOut, BasicBlock *&AfterForBBOut, Function *&TheFunctionOut)
+{
+    TheFunctionOut = Builder->GetInsertBlock()->getParent();
+    ForCheckBBOut = BasicBlock::Create(*TheContext, "forcheck", TheFunctionOut);
+    LoopBBOut = BasicBlock::Create(*TheContext, "for");
+    AfterForBBOut = BasicBlock::Create(*TheContext, "forcont");
+
+    Builder->CreateBr(ForCheckBBOut);
+
+    Builder->SetInsertPoint(ForCheckBBOut);
+
+    // Codegen for loop check expression
+}
+
+void CodeGen::ForStatementCheck(Value *LoopCondition, BasicBlock *&ForCheckBBOut, BasicBlock *&LoopBBOut, BasicBlock *&AfterForBBOut, Function *&TheFunctionOut)
+{
+    Builder->CreateCondBr(CheckIfValueTrue(LoopCondition, "forcond"), LoopBBOut, AfterForBBOut);
+
+    TheFunctionOut->getBasicBlockList().push_back(LoopBBOut);
+    Builder->SetInsertPoint(LoopBBOut);
+}
+
+void CodeGen::EndForStatement(BasicBlock *ForCheckBB, BasicBlock *LoopBB, BasicBlock *AfterForBB, Function *TheFunction)
+{
+    Builder->CreateBr(ForCheckBB);
+
+    TheFunction->getBasicBlockList().push_back(AfterForBB);
+    Builder->SetInsertPoint(AfterForBB);
+
+    // Done
 }
 
 
@@ -479,13 +620,84 @@ Type *CodeGen::StringType()
     return Type::getInt8PtrTy(*TheContext);
 }
 
+// This function converts types for assignment statements so they match
+Value *CodeGen::ConvertType(Value *Destination, Value *RHS)
+{
+    return ConvertType(Destination->getType(), RHS);
+}
 
+Value *CodeGen::ConvertType(Type *DestinationType, Value *RHS)
+{
+    Type *destType = DestinationType;
+    Type *rhsType = RHS->getType();
+
+    if (destType->isPointerTy())
+    {
+        destType = destType->getPointerElementType();
+    }
+    if (rhsType->isPointerTy())
+    {
+        rhsType = rhsType->getPointerElementType();
+    }
+
+    if (destType->isIntegerTy())
+    {
+        if (rhsType->isIntegerTy())
+        {
+            return RHS;
+        }
+        else if (rhsType->isFloatingPointTy())
+        {
+            return Builder->CreateFPToSI(RHS, IntType(), "ftoi");
+        }
+    }
+    else if (destType->isFloatingPointTy())
+    {
+        if (rhsType->isIntegerTy())
+        {
+            return Builder->CreateSIToFP(RHS, DoubleType(), "itof");
+        }
+        else if (rhsType->isFloatingPointTy())
+        {
+            return RHS;
+        }
+    }
+    else
+    {
+        return RHS;
+    }
+}
+
+// This function converts NUMERICAL types to floats
+Value *CodeGen::ConvertToDouble(Value *Val)
+{
+    Type *T = Val->getType();
+    
+    if (T->isPointerTy())
+    {
+        T = T->getPointerElementType();
+    }
+
+    if (T->isIntegerTy())
+    {
+        return Builder->CreateSIToFP(Val, DoubleType(), "itof");
+    }
+    else
+    {
+        return Val;
+    }
+}
 
 Function *CodeGen::ProcedureHeader(std::string name, Type *retType, std::vector<std::string> argNames, std::vector<Type *> argTypes)
 {
     FunctionType *FT = FunctionType::get(retType, argTypes, false);
 
     Function *F = Function::Create(FT, Function::ExternalLinkage, name, TheModule.get()); // TODO: Change ExternalLinkage for scoping or maybe not
+
+    if (runtimeGenerated) // Don't do this with runtime functions
+    {
+        SymbolTable::SetRealProcedureName(name, F->getName().str());
+    }
 
     // Set names of arguments
     int i = 0;
@@ -497,7 +709,7 @@ Function *CodeGen::ProcedureHeader(std::string name, Type *retType, std::vector<
     return F;
 }
 
-Function *CodeGen::ProcedureDeclaration(Function *F, ValueType retType)
+Function *CodeGen::ProcedureDeclaration(Function *F)
 {
     // Create basic block to start insertion into
     BasicBlock *BB = BasicBlock::Create(*TheContext, "entry", F);
@@ -511,23 +723,6 @@ Function *CodeGen::ProcedureDeclaration(Function *F, ValueType retType)
 
         SymbolTable::SetIRAllocaInst(std::string(Arg.getName()), Alloca);
     }
-    
-    // Allocate return value and set in symbol table
-    /*Value *InitVal = nullptr;
-    Type *T = nullptr;
-    GetTypeAndInitVal(retType, InitVal, T);
-
-    AllocaInst *Alloca = nullptr;
-
-    Alloca = CreateEntryBlockAlloca(F, "RET", T);
-
-    Builder->CreateStore(InitVal, Alloca);
-
-    SymbolTable::SetReturnAllocaInst(Alloca);*/
-
-    // TODO: Return logic, probably split this out into procedure body gen
-
-    //verifyFunction(*F);
 
     return F;
 }

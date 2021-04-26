@@ -183,6 +183,21 @@ ERROR_TYPE SymbolTable::Lookup(std::string identifier, Symbol *&symbolOut, bool 
     return ERROR_NONE;
 }
 
+ERROR_TYPE SymbolTable::LookupUp(std::string identifier, Symbol *&symbolOut, bool checkGlobal)
+{
+    if (m_head && m_head->m_next)
+    {
+        symbolOut = m_head->m_next->GetSymbol(identifier);
+    }
+
+    if (!symbolOut && checkGlobal)
+    {
+        return LookupGlobal(identifier, symbolOut);
+    }
+
+    return ERROR_NONE;
+}
+
 ERROR_TYPE SymbolTable::LookupGlobal(std::string identifier, Symbol *&symbolOut)
 {
     symbolOut = m_global->GetSymbol(identifier);
@@ -251,7 +266,35 @@ void SymbolTable::SetIRAllocaInst(std::string identifier, llvm::AllocaInst *IRAl
     }
     else
     {
-        return; // Throw error probably
+        return; // TODO: Throw error probably
+    }
+}
+
+std::string SymbolTable::GetRealProcedureName(std::string identifier)
+{
+    Symbol *s = nullptr;
+    Lookup(identifier, s);
+    if (s)
+    {
+        return s->realProcedureName;
+    }
+    else
+    {
+        return nullptr;
+    }
+}
+
+void SymbolTable::SetRealProcedureName(std::string identifier, std::string realName)
+{
+    Symbol *s = nullptr;
+    LookupUp(identifier, s);
+    if (s)
+    {
+        s->realProcedureName = realName;
+    }
+    else
+    {
+        return; // TODO: Throw error probably
     }
 }
 
