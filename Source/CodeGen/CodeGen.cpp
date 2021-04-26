@@ -53,7 +53,14 @@ static AllocaInst *CreateEntryBlockAlloca(const std::string &VarName, Type *VarT
 static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction, const std::string &VarName, Type *VarType)
 {
     IRBuilder<> TmpB(&TheFunction->getEntryBlock(), TheFunction->getEntryBlock().begin());
-    return TmpB.CreateAlloca(VarType, 0, VarName.c_str());
+    if (VarType->isPointerTy())
+    {
+        return TmpB.CreateAlloca(VarType, ConstantExpr::getSizeOf(VarType), VarName.c_str());
+    }
+    else
+    {
+        return TmpB.CreateAlloca(VarType, 0, VarName.c_str());
+    }
 }
 
 static void SetBasicBlock(BasicBlock *BB)
@@ -193,18 +200,14 @@ void CodeGen::Out(std::string outFileName)
 
 void CodeGen::Runtime()
 {
-    // https://stackoverflow.com/questions/30234027/how-to-call-printf-in-llvm-through-the-module-builder-system
-    /*Function *func_putFloat = TheModule->getFunction("putfloat");
-    if (!func_putFloat)
-    {
-        PointerType *Pty = PointerType::get(IntegerType::get(TheModule->getContext(), 8), 0)
-    }*/
-
-    // https://stackoverflow.com/questions/35526075/llvm-how-to-implement-print-function-in-my-language
+    // Use printf and scanf for runtime functions
     TheModule->getOrInsertFunction("printf", FunctionType::get(IntType(), PointerType::get(Type::getInt8Ty(*TheContext), 0), true));
+
+    TheModule->getOrInsertFunction("scanf", FunctionType::get(IntType(), PointerType::get(Type::getInt8Ty(*TheContext), 0), true));
 
     std::vector<std::string> argNames = { "IN" };
     Function *F = nullptr;
+    AllocaInst *Alloca = nullptr;
 
     // putBool
     SymbolTable::AddLevel();
@@ -259,7 +262,43 @@ void CodeGen::Runtime()
     ReturnStatement(Builder->CreateCall(SQRTInt, Args));
     ProcedureEnd(F);
     SymbolTable::DeleteLevel();
+    
+    // getBool
+    F = ProcedureHeader("getbool", BoolType(), { }, { });
+    ProcedureDeclaration(F);
+    Alloca = Builder->CreateAlloca(IntType(), nullptr, "temp");
+    //std::vector<Value *> scanfArgs = { StringExpr("%d"), Alloca };
+    ProcedureCall("scanf", { StringExpr("%d"), Alloca });
+    ReturnStatement(Builder->CreateLoad(Alloca));
+    ProcedureEnd(F);
+    
+    // getInteger
+    F = ProcedureHeader("getinteger", IntType(), { }, { });
+    ProcedureDeclaration(F);
+    Alloca = Builder->CreateAlloca(IntType(), nullptr, "temp");
+    ProcedureCall("scanf", { StringExpr("%d"), Alloca });
+    ReturnStatement(Builder->CreateLoad(Alloca));
+    ProcedureEnd(F);
+    
+    // getFloat
+    F = ProcedureHeader("getfloat", DoubleType(), { }, { });
+    ProcedureDeclaration(F);
+    Alloca = Builder->CreateAlloca(DoubleType(), nullptr, "temp");
+    ProcedureCall("scanf", { StringExpr("%f"), Alloca });
+    ReturnStatement(Builder->CreateLoad(Alloca));
+    ProcedureEnd(F);
+    
+    // getString
+    F = ProcedureHeader("getstring", StringType(), { }, { });
+    ProcedureDeclaration(F);
+    Alloca = Builder->CreateAlloca(StringType(), ConstantExpr::getSizeOf(StringType()), "temp");
+    ProcedureCall("scanf", { StringExpr("%s"), Alloca });
 
+    //std::vector<Value *> index_vector;
+    //index_vector.push_back(ConstantInt::get(Type::getInt32Ty(*TheContext), 0));
+
+    ReturnStatement(Alloca);
+    ProcedureEnd(F);
     
 
     runtimeGenerated = true;
@@ -617,7 +656,8 @@ Type *CodeGen::DoubleType()
 
 Type *CodeGen::StringType()
 {
-    return Type::getInt8PtrTy(*TheContext);
+    //return Type::getInt8PtrTy(*TheContext);
+    return PointerType::get(Type::getInt8Ty(*TheContext), 0);
 }
 
 // This function converts types for assignment statements so they match
@@ -638,6 +678,9 @@ Value *CodeGen::ConvertType(Type *DestinationType, Value *RHS)
     if (rhsType->isPointerTy())
     {
         rhsType = rhsType->getPointerElementType();
+        std::vector<Value *> index_vector;
+        index_vector.push_back(ConstantInt::get(Type::getInt32Ty(*TheContext), 0));
+        return Builder->CreateGEP(RHS, index_vector, "temp");
     }
 
     if (destType->isIntegerTy())
@@ -650,6 +693,10 @@ Value *CodeGen::ConvertType(Type *DestinationType, Value *RHS)
         {
             return Builder->CreateFPToSI(RHS, IntType(), "ftoi");
         }
+        else
+        {
+            return RHS;
+        }
     }
     else if (destType->isFloatingPointTy())
     {
@@ -658,6 +705,10 @@ Value *CodeGen::ConvertType(Type *DestinationType, Value *RHS)
             return Builder->CreateSIToFP(RHS, DoubleType(), "itof");
         }
         else if (rhsType->isFloatingPointTy())
+        {
+            return RHS;
+        }
+        else
         {
             return RHS;
         }
@@ -671,7 +722,7 @@ Value *CodeGen::ConvertType(Type *DestinationType, Value *RHS)
 // This function converts NUMERICAL types to floats
 Value *CodeGen::ConvertToDouble(Value *Val)
 {
-    Type *T = Val->getType();
+    /*Type *T = Val->getType();
     
     if (T->isPointerTy())
     {
@@ -685,7 +736,8 @@ Value *CodeGen::ConvertToDouble(Value *Val)
     else
     {
         return Val;
-    }
+    }*/
+    return ConvertType(DoubleType(), Val);
 }
 
 Function *CodeGen::ProcedureHeader(std::string name, Type *retType, std::vector<std::string> argNames, std::vector<Type *> argTypes)

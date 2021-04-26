@@ -280,7 +280,7 @@ std::string SymbolTable::GetRealProcedureName(std::string identifier)
     }
     else
     {
-        return nullptr;
+        return "";
     }
 }
 
