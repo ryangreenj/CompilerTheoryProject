@@ -43,23 +43,25 @@ static bool runtimeGenerated = false;
 
 const int NUM_BITS = 32;
 
-// Create an alloca in global entry block
-static AllocaInst *CreateEntryBlockAlloca(const std::string &VarName, Type *VarType)
-{
-    return Builder->CreateAlloca(VarType, 0, VarName.c_str());
-}
-
 // Create an alloca instruction in entry block of a function.
-static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction, const std::string &VarName, Type *VarType)
+static AllocaInst *CreateEntryBlockAlloca(Function *TheFunction, const std::string &VarName, Type *VarType, int arraySize)
 {
     IRBuilder<> TmpB(&TheFunction->getEntryBlock(), TheFunction->getEntryBlock().begin());
     if (VarType->isPointerTy())
     {
-        return TmpB.CreateAlloca(VarType, ConstantExpr::getSizeOf(VarType), VarName.c_str());
+        return TmpB.CreateAlloca(VarType, ConstantInt::get(*TheContext, APInt(NUM_BITS, 1024, true)), VarName.c_str()); // String
     }
     else
     {
-        return TmpB.CreateAlloca(VarType, 0, VarName.c_str());
+        if (arraySize > 0)
+        {
+            VarType = ArrayType::get(VarType, arraySize);
+            return TmpB.CreateAlloca(VarType, nullptr, VarName.c_str());
+        }
+        else
+        {
+            return TmpB.CreateAlloca(VarType, 0, VarName.c_str());
+        }
     }
 }
 
@@ -80,27 +82,31 @@ void CodeGen::GetTypeAndInitVal(ValueType type, Value *&InitValOut, Type *&TypeO
     switch (type)
     {
     case ValueType::BOOL:
+    case ValueType::BOOLARRAY:
         InitValOut = BoolExpr(false);
         TypeOut = BoolType();
         AlignNum = 1;
         break;
     case ValueType::INT:
+    case ValueType::INTARRAY:
         InitValOut = IntExpr(0);
         TypeOut = IntType();
         AlignNum = 4;
         break;
     case ValueType::DOUBLE:
+    case ValueType::DOUBLEARRAY:
         InitValOut = FloatExpr(0.0);
         TypeOut = DoubleType();
         AlignNum = 8;
         break;
     case ValueType::STRING:
+    case ValueType::STRINGARRAY:
         InitValOut = StringExpr("");
         TypeOut = StringType();
         AlignNum = 1;
         break;
     default:
-        break; // TODO: Arrays
+        break;
     }
 }
 
@@ -291,12 +297,8 @@ void CodeGen::Runtime()
     // getString
     F = ProcedureHeader("getstring", StringType(), { }, { });
     ProcedureDeclaration(F);
-    Alloca = Builder->CreateAlloca(StringType(), ConstantExpr::getSizeOf(StringType()), "temp");
+    Alloca = Builder->CreateAlloca(StringType(), IntExpr(1024), "temp");
     ProcedureCall("scanf", { StringExpr("%s"), Alloca });
-
-    //std::vector<Value *> index_vector;
-    //index_vector.push_back(ConstantInt::get(Type::getInt32Ty(*TheContext), 0));
-
     ReturnStatement(Alloca);
     ProcedureEnd(F);
     
@@ -324,7 +326,7 @@ Value *CodeGen::StringExpr(std::string value)
     return Builder->CreateGlobalStringPtr(StringRef(value));
 }
 
-Value *CodeGen::VariableExpr(std::string name)
+Value *CodeGen::VariableExpr(std::string name, Value *index)
 {
     AllocaInst *A = SymbolTable::GetIRAllocaInst(name);
     if (!A)
@@ -337,12 +339,32 @@ Value *CodeGen::VariableExpr(std::string name)
             ReportError(ERROR_SYMBOL_DOESNT_EXIST);
             return nullptr;
         }
-        return Builder->CreateLoad(gVar);
+
+        if (index == nullptr)
+        {
+            // Load value from the stack
+            return Builder->CreateLoad(gVar);
+        }
+        else
+        {
+            Value *indices[2] = { IntExpr(0), index };
+            Value *varPtr = Builder->CreateInBoundsGEP(gVar, ArrayRef<Value *>(indices, 2));
+            return Builder->CreateLoad(varPtr);
+        }
     }
     else
     {
-        // Load value from the stack
-        return Builder->CreateLoad(A->getAllocatedType(), A, name.c_str());
+        if (index == nullptr)
+        {
+            // Load value from the stack
+            return Builder->CreateLoad(A->getAllocatedType(), A, name.c_str());
+        }
+        else
+        {
+            Value *indices[2] = { IntExpr(0), index };
+            Value *varPtr = Builder->CreateInBoundsGEP(A, ArrayRef<Value *>(indices, 2));
+            return Builder->CreateLoad(varPtr);
+        }
     }
 }
 
@@ -407,9 +429,33 @@ Value *CodeGen::FactorExpr(Value *LHS, Value *RHS, TOKEN_TYPE op)
     case T_GREATERTHAN:
         return Builder->CreateFCmpUGT(LHS, RHS, "cmptmp");
     case T_EQUALS:
-        return Builder->CreateFCmpUEQ(LHS, RHS, "cmptmp");
+        if (LHS->getType()->isPointerTy()) // String
+        {
+            std::vector<Value *> index_vector;
+            index_vector.push_back(ConstantInt::get(Type::getInt32Ty(*TheContext), 0));
+            Value *LHSLoad = Builder->CreateLoad(Builder->CreateGEP(LHS, index_vector));
+            Value *RHSLoad = Builder->CreateLoad(Builder->CreateGEP(RHS, index_vector));
+            return Builder->CreateICmpEQ(LHSLoad, RHSLoad);
+        }
+        else
+        {
+            return Builder->CreateFCmpUEQ(LHS, RHS, "cmptmp");
+        }
+        break;
     case T_NOTEQUALS:
-        return Builder->CreateFCmpUNE(LHS, RHS, "cmptmp");
+        if (LHS->getType()->isPointerTy()) // String
+        {
+            std::vector<Value *> index_vector;
+            index_vector.push_back(ConstantInt::get(Type::getInt32Ty(*TheContext), 0));
+            Value *LHSLoad = Builder->CreateLoad(Builder->CreateGEP(LHS, index_vector));
+            Value *RHSLoad = Builder->CreateLoad(Builder->CreateGEP(RHS, index_vector));
+            return Builder->CreateICmpNE(LHSLoad, RHSLoad);
+        }
+        else
+        {
+            return Builder->CreateFCmpUNE(LHS, RHS, "cmptmp");
+        }
+        break;
     default:
         return nullptr; // TODO: Throw error
     }
@@ -448,7 +494,7 @@ Value *CodeGen::ExprExpr(Value *LHS, Value *RHS, TOKEN_TYPE op)
 
     switch (op)
     {
-    case T_AND: // TODO: Case for strings
+    case T_AND:
         return Builder->CreateAnd(CheckIfValueTrue(LHS, "andcomp"), CheckIfValueTrue(RHS, "andcomp"), "and");
     case T_OR:
         return Builder->CreateOr(CheckIfValueTrue(LHS, "orcomp"), CheckIfValueTrue(RHS, "orcomp"), "or");
@@ -484,7 +530,7 @@ Value *CodeGen::ProcedureCall(std::string name, std::vector<Value *> args)
     return Builder->CreateCall(F, args, "calltmp");
 }
 
-void CodeGen::VariableDeclaration(std::string name, ValueType type, bool isGlobal)
+void CodeGen::VariableDeclaration(std::string name, ValueType type, bool isGlobal, int arraySize)
 {
     Value *InitVal = nullptr;
     Type *T = nullptr;
@@ -498,7 +544,13 @@ void CodeGen::VariableDeclaration(std::string name, ValueType type, bool isGloba
 
     if (isGlobal)
     {
-        TheModule->getOrInsertGlobal(name, T);
+        Type *VarType = T;
+        if (arraySize > 0)
+        {
+            VarType = ArrayType::get(VarType, arraySize);
+        }
+
+        TheModule->getOrInsertGlobal(name, VarType);
         GlobalVariable *gVar = TheModule->getNamedGlobal(name);
         gVar->setLinkage(GlobalValue::CommonLinkage);
 
@@ -509,20 +561,29 @@ void CodeGen::VariableDeclaration(std::string name, ValueType type, bool isGloba
 #endif
 
         Constant *C = dyn_cast<Constant>(InitVal);
-        gVar->setInitializer(C);
+
+        if (arraySize == 0)
+        {
+            
+            gVar->setInitializer(C);
+        }
+        else
+        {
+            gVar->setInitializer(ConstantArray::get(ArrayType::get(T, arraySize), C));
+        }
     }
     else
     {
         Function *TheFunction = Builder->GetInsertBlock()->getParent();
-        AllocaInst *Alloca = CreateEntryBlockAlloca(TheFunction, name, T);
+        AllocaInst *Alloca = CreateEntryBlockAlloca(TheFunction, name, T, arraySize);
 
-        Builder->CreateStore(InitVal, Alloca);
+        //Builder->CreateStore(InitVal, Alloca);
 
         SymbolTable::SetIRAllocaInst(name, Alloca);
     }
 }
 
-Value *CodeGen::AssignmentStatement(std::string name, Value *RHS)
+Value *CodeGen::AssignmentStatement(std::string name, Value *index, Value *RHS)
 {
     Value *V = SymbolTable::GetIRAllocaInst(name);
 
@@ -536,7 +597,16 @@ Value *CodeGen::AssignmentStatement(std::string name, Value *RHS)
         }
     }
     
-    Builder->CreateStore(ConvertType(V, RHS), V);
+    if (!index)
+    {
+        Builder->CreateStore(ConvertType(V, RHS), V);
+    }
+    else
+    {
+        Value *indices[2] = { IntExpr(0), index };
+        Value *varPtr = Builder->CreateInBoundsGEP(V, ArrayRef<Value *>(indices, 2));
+        Builder->CreateStore(ConvertType(varPtr->getType()->getPointerElementType(), RHS), varPtr);
+    }
         
     return RHS;
 }
@@ -770,7 +840,7 @@ Function *CodeGen::ProcedureDeclaration(Function *F)
     // Insert function arguments into NamedValues map, might need to clear
     for (auto &Arg : F->args())
     {
-        AllocaInst *Alloca = CreateEntryBlockAlloca(F, std::string(Arg.getName()), Arg.getType());
+        AllocaInst *Alloca = CreateEntryBlockAlloca(F, std::string(Arg.getName()), Arg.getType(), 0);
         Builder->CreateStore(&Arg, Alloca);
 
         SymbolTable::SetIRAllocaInst(std::string(Arg.getName()), Alloca);

@@ -23,15 +23,15 @@ public:
     static llvm::Value *IntExpr(int value);
     static llvm::Value *FloatExpr(double value);
     static llvm::Value *StringExpr(std::string value);
-    static llvm::Value *VariableExpr(std::string name);
+    static llvm::Value *VariableExpr(std::string name, llvm::Value *index = nullptr);
     static llvm::Value *NegateExpr(llvm::Value *value);
     static llvm::Value *TermExpr(llvm::Value *LHS, llvm::Value *RHS, TOKEN_TYPE op); // Gonna have to break this up for different types (bool, int, float, string)
     static llvm::Value *FactorExpr(llvm::Value *LHS, llvm::Value *RHS, TOKEN_TYPE op);
     static llvm::Value *ArithOpExpr(llvm::Value *LHS, llvm::Value *RHS, TOKEN_TYPE op);
     static llvm::Value *ExprExpr(llvm::Value *LHS, llvm::Value *RHS, TOKEN_TYPE op);
     static llvm::Value *ProcedureCall(std::string name, std::vector<llvm::Value *> args);
-    static void VariableDeclaration(std::string name, ValueType type, bool hasGlobal = false);
-    static llvm::Value *AssignmentStatement(std::string name, llvm::Value *RHS);
+    static void VariableDeclaration(std::string name, ValueType type, bool hasGlobal, int arraySize = 0);
+    static llvm::Value *AssignmentStatement(std::string name, llvm::Value *index, llvm::Value *RHS);
     static llvm::Value *ReturnStatement(llvm::Value *RHS);
     static void IfStatement(llvm::Value *Condition, llvm::BasicBlock *&ThenBBOut, llvm::BasicBlock *&ElseBBOut, llvm::BasicBlock *&MergeBBOut, llvm::Function *&TheFunctionOut);
     static void ElseStatement(llvm::BasicBlock *&ThenBBOut, llvm::BasicBlock *&ElseBBOut, llvm::BasicBlock *&MergeBBOut, llvm::Function *&TheFunctionOut);

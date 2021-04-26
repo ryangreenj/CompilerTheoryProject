@@ -345,6 +345,8 @@ ERROR_TYPE Parser::VariableDeclaration(TokenPR currToken, ParseNodePR nodeOut, b
                     RET_IF_ERR(SymbolTable::Insert(ident, nodeType, false, bound));
                 }
 
+                CodeGen::VariableDeclaration(ident, nodeType, hasGlobal, bound);
+
                 if (currToken->type == T_RSQBRACKET)
                 {
                     NEXT_TOKEN;
@@ -685,6 +687,11 @@ ERROR_TYPE Parser::AssignmentStatement(TokenPR currToken, ParseNodePR nodeOut, b
 
     std::string ident = std::get<std::string>(nextNode->children[0]->token->value);
     ValueType destType = nextNode->valueType;
+    llvm::Value *indexVal = nullptr;
+    if (nextNode->children.size() == 2)
+    {
+        indexVal = nextNode->children[1]->IRVal;
+    }
 
     if (currToken->type == T_ASSIGN)
     {
@@ -705,7 +712,7 @@ ERROR_TYPE Parser::AssignmentStatement(TokenPR currToken, ParseNodePR nodeOut, b
             return ERROR_MISMATCHED_TYPES;
         }
 
-        nodeOut->IRVal = CodeGen::AssignmentStatement(ident, nextNode->IRVal);
+        nodeOut->IRVal = CodeGen::AssignmentStatement(ident, indexVal, nextNode->IRVal);
 
         return ERROR_NONE;
     }
@@ -1130,6 +1137,8 @@ ERROR_TYPE Parser::Relation(TokenPR currToken, ParseNodePR nodeOut, bool require
                 if (canBeString && valueType == nextNode->valueType)
                 {
                     valueType = ValueType::BOOL;
+                    RHS = nextNode->IRVal;
+                    LHS = CodeGen::FactorExpr(LHS, RHS, opType);
                 }
                 else
                 {
@@ -1458,8 +1467,7 @@ ERROR_TYPE Parser::ProcedureCallOrName(TokenPR currToken, ParseNodePR nodeOut, b
         }
 
         nodeOut->valueType = nameSymbol->type;
-        nodeOut->IRVal = CodeGen::VariableExpr(nameSymbol->identifier); // TODO: Handle arrays codegen
-
+        
         if (currToken->type == T_LSQBRACKET)
         {
             NEXT_TOKEN;
@@ -1479,6 +1487,8 @@ ERROR_TYPE Parser::ProcedureCallOrName(TokenPR currToken, ParseNodePR nodeOut, b
                 return ERROR_EXPECTED_INT;
             }
 
+            nodeOut->IRVal = CodeGen::VariableExpr(nameSymbol->identifier, nextNode->IRVal); // TODO: Handle arrays codegen
+
             if (currToken->type == T_RSQBRACKET)
             {
                 NEXT_TOKEN;
@@ -1486,6 +1496,8 @@ ERROR_TYPE Parser::ProcedureCallOrName(TokenPR currToken, ParseNodePR nodeOut, b
             }
             return ERROR_MISSING_BRACKET;
         }
+
+        nodeOut->IRVal = CodeGen::VariableExpr(nameSymbol->identifier); // TODO: Handle arrays codegen
         return ERROR_NONE;
     }
 
@@ -1510,8 +1522,7 @@ ERROR_TYPE Parser::Name(TokenPR currToken, ParseNodePR nodeOut, bool required)
     }
 
     nodeOut->valueType = nameSymbol->type;
-    nodeOut->IRVal = CodeGen::VariableExpr(nameSymbol->identifier); // TODO: Handle arrays codegen
-
+    
     if (currToken->type == T_LSQBRACKET)
     {
         NEXT_TOKEN;
@@ -1531,6 +1542,8 @@ ERROR_TYPE Parser::Name(TokenPR currToken, ParseNodePR nodeOut, bool required)
             return ERROR_EXPECTED_INT;
         }
 
+        nodeOut->IRVal = CodeGen::VariableExpr(nameSymbol->identifier, nextNode->IRVal);
+
         if (currToken->type == T_RSQBRACKET)
         {
             NEXT_TOKEN;
@@ -1538,6 +1551,8 @@ ERROR_TYPE Parser::Name(TokenPR currToken, ParseNodePR nodeOut, bool required)
         }
         return ERROR_MISSING_BRACKET;
     }
+
+    nodeOut->IRVal = CodeGen::VariableExpr(nameSymbol->identifier); // TODO: Handle arrays codegen
 
     return ERROR_NONE;
 }
