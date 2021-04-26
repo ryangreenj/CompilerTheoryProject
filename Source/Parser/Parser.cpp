@@ -82,7 +82,7 @@ ParseNodeP Parser::Parse()
 
     CodeGen::EndCodeGen();
 
-    CodeGen::Print();
+    //CodeGen::Print();
 
     return error == ERROR_NONE ? nextNode : nullptr;
 }

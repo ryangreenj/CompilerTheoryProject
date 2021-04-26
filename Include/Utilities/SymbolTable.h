@@ -47,14 +47,10 @@ public:
     Symbol* GetSymbol(std::string identifier);
     bool RemoveSymbol(std::string identifier);
 
-    //llvm::AllocaInst* GetReturnAllocaInst();
-    //void SetReturnAllocaInst(llvm::AllocaInst *al);
-
     TableNode *m_next;
 
 private:
     std::vector<Symbol*> m_symbols;
-    //llvm::AllocaInst *m_returnAllocaInst;
 };
 
 class SymbolTable
@@ -76,9 +72,6 @@ public:
     static llvm::AllocaInst *GetIRAllocaInst(std::string identifier);
     static void SetIRAllocaInst(std::string identifier, llvm::AllocaInst *IRAllocaInst);
 
-    //static llvm::AllocaInst *GetReturnAllocaInst();
-    //static void SetReturnAllocaInst(llvm::AllocaInst *al);
-
     static std::string GetRealProcedureName(std::string identifier);
     static void SetRealProcedureName(std::string identifier, std::string realName);
 
@@ -86,8 +79,6 @@ public:
     static ERROR_TYPE DeleteLevel();
 
 private:
-
-    //int Hash(std::string identifier);
 };
 
 #endif

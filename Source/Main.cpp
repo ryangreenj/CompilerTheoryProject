@@ -12,7 +12,6 @@
 
 int main(int argc, char* args[])
 {
-    std::cout << "Hello Compiler\n";
     llvm::LLVMContext context;
     int error = ERROR_NONE;
 

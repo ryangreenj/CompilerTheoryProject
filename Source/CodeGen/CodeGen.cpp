@@ -792,21 +792,6 @@ Value *CodeGen::ConvertType(Type *DestinationType, Value *RHS)
 // This function converts NUMERICAL types to floats
 Value *CodeGen::ConvertToDouble(Value *Val)
 {
-    /*Type *T = Val->getType();
-    
-    if (T->isPointerTy())
-    {
-        T = T->getPointerElementType();
-    }
-
-    if (T->isIntegerTy())
-    {
-        return Builder->CreateSIToFP(Val, DoubleType(), "itof");
-    }
-    else
-    {
-        return Val;
-    }*/
     return ConvertType(DoubleType(), Val);
 }
 
@@ -851,11 +836,8 @@ Function *CodeGen::ProcedureDeclaration(Function *F)
 
 Function *CodeGen::ProcedureEnd(Function *F)
 {
-    // TODO: Better condition here
-    if (F) //if (AllocaInst *RetAllocaInst = SymbolTable::GetReturnAllocaInst())
+    if (F)
     {
-        //Builder->CreateRet(RetAllocaInst);
-
         verifyFunction(*F);
 
         EndBasicBlock();
