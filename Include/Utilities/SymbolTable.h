@@ -7,6 +7,9 @@
 
 #include "Utilities/Error.h"
 
+#include <llvm/IR/Instructions.h>
+#include "llvm/IR/Value.h"
+
 enum class ValueType
 {
     NOTHING = 0,
@@ -25,10 +28,12 @@ enum class ValueType
 struct Symbol
 {
     std::string identifier;
+    std::string realProcedureName;
     ValueType type;
     bool isFunction = false;
     std::variant<std::string, int, double> value = 0;
     std::vector<ValueType> functionParameterTypes;
+    llvm::AllocaInst *IRAllocaInst = nullptr;
 };
 
 class TableNode
@@ -51,24 +56,29 @@ private:
 class SymbolTable
 {
 public:
-    SymbolTable();
+    //SymbolTable();
 
-    ERROR_TYPE Insert(std::string identifier, ValueType type, bool isFunction, std::variant<std::string, int, double> value, std::vector<ValueType> functionParameterTypes = std::vector<ValueType>());
-    ERROR_TYPE InsertUp(std::string identifier, ValueType type, bool isFunction, std::variant<std::string, int, double> value, std::vector<ValueType> functionParameterTypes = std::vector<ValueType>());
-    ERROR_TYPE InsertGlobal(std::string identifier, ValueType type, bool isFunction, std::variant<std::string, int, double> value, std::vector<ValueType> functionParameterTypes = std::vector<ValueType>());
-    ERROR_TYPE Lookup(std::string identifier, Symbol *&symbolOut, bool checkGlobal = true);
-    ERROR_TYPE LookupGlobal(std::string identifier, Symbol *&symbolOut);
-    ERROR_TYPE Remove(std::string identifier);
-    ERROR_TYPE RemoveGlobal(std::string identifier);
+    static void InitSymbolTable();
 
-    ERROR_TYPE AddLevel();
-    ERROR_TYPE DeleteLevel();
+    static ERROR_TYPE Insert(std::string identifier, ValueType type, bool isFunction, std::variant<std::string, int, double> value, std::vector<ValueType> functionParameterTypes = std::vector<ValueType>());
+    static ERROR_TYPE InsertUp(std::string identifier, ValueType type, bool isFunction, std::variant<std::string, int, double> value, std::vector<ValueType> functionParameterTypes = std::vector<ValueType>());
+    static ERROR_TYPE InsertGlobal(std::string identifier, ValueType type, bool isFunction, std::variant<std::string, int, double> value, std::vector<ValueType> functionParameterTypes = std::vector<ValueType>());
+    static ERROR_TYPE Lookup(std::string identifier, Symbol *&symbolOut, bool checkGlobal = true);
+    static ERROR_TYPE LookupUp(std::string identifier, Symbol *&symbolOut, bool checkGlobal = true);
+    static ERROR_TYPE LookupGlobal(std::string identifier, Symbol *&symbolOut);
+    static ERROR_TYPE Remove(std::string identifier);
+    static ERROR_TYPE RemoveGlobal(std::string identifier);
+
+    static llvm::AllocaInst *GetIRAllocaInst(std::string identifier);
+    static void SetIRAllocaInst(std::string identifier, llvm::AllocaInst *IRAllocaInst);
+
+    static std::string GetRealProcedureName(std::string identifier);
+    static void SetRealProcedureName(std::string identifier, std::string realName);
+
+    static ERROR_TYPE AddLevel();
+    static ERROR_TYPE DeleteLevel();
 
 private:
-    TableNode *m_head;
-    TableNode *m_global;
-
-    //int Hash(std::string identifier);
 };
 
 #endif

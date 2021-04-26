@@ -51,9 +51,13 @@ bool TableNode::RemoveSymbol(std::string identifier)
 }
 
 
+
 // SymbolTable
 
-SymbolTable::SymbolTable()
+static TableNode *m_head;
+static TableNode *m_global;
+
+void SymbolTable::InitSymbolTable()
 {
     m_head = nullptr;
     m_global = new TableNode();
@@ -167,6 +171,21 @@ ERROR_TYPE SymbolTable::Lookup(std::string identifier, Symbol *&symbolOut, bool 
     return ERROR_NONE;
 }
 
+ERROR_TYPE SymbolTable::LookupUp(std::string identifier, Symbol *&symbolOut, bool checkGlobal)
+{
+    if (m_head && m_head->m_next)
+    {
+        symbolOut = m_head->m_next->GetSymbol(identifier);
+    }
+
+    if (!symbolOut && checkGlobal)
+    {
+        return LookupGlobal(identifier, symbolOut);
+    }
+
+    return ERROR_NONE;
+}
+
 ERROR_TYPE SymbolTable::LookupGlobal(std::string identifier, Symbol *&symbolOut)
 {
     symbolOut = m_global->GetSymbol(identifier);
@@ -209,4 +228,60 @@ ERROR_TYPE SymbolTable::DeleteLevel()
         return ERROR_NONE;
     }
     return ERROR_NO_TABLE;
+}
+
+llvm::AllocaInst *SymbolTable::GetIRAllocaInst(std::string identifier)
+{
+    Symbol *s = nullptr;
+    Lookup(identifier, s);
+    if (s)
+    {
+        return s->IRAllocaInst;
+    }
+    else
+    {
+        return nullptr;
+    }
+}
+
+void SymbolTable::SetIRAllocaInst(std::string identifier, llvm::AllocaInst *IRAllocaInst)
+{
+    Symbol *s = nullptr;
+    Lookup(identifier, s);
+    if (s)
+    {
+        s->IRAllocaInst = IRAllocaInst;
+    }
+    else
+    {
+        return;
+    }
+}
+
+std::string SymbolTable::GetRealProcedureName(std::string identifier)
+{
+    Symbol *s = nullptr;
+    Lookup(identifier, s);
+    if (s)
+    {
+        return s->realProcedureName;
+    }
+    else
+    {
+        return "";
+    }
+}
+
+void SymbolTable::SetRealProcedureName(std::string identifier, std::string realName)
+{
+    Symbol *s = nullptr;
+    LookupUp(identifier, s);
+    if (s)
+    {
+        s->realProcedureName = realName;
+    }
+    else
+    {
+        return;
+    }
 }

@@ -8,6 +8,8 @@
 #include "Utilities/SymbolTable.h"
 #include "Utilities/Token.h"
 
+#include "llvm/IR/Value.h"
+
 enum class NodeType
 {
     UNKNOWN = 0,
@@ -86,6 +88,8 @@ struct ParseNode
     TokenP token = nullptr;
     ValueType valueType = ValueType::NOTHING;
     std::vector<std::shared_ptr<ParseNode>> children;
+    llvm::Value *IRVal = nullptr;
+    llvm::Function *IRFunction = nullptr;
 };
 
 typedef std::shared_ptr<ParseNode> ParseNodeP;

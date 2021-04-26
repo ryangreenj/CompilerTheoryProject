@@ -343,3 +343,9 @@ healthchecksdb
 *.sln
 *.vcxproj
 *.filters
+
+# Other files
+a.out
+test.ll
+test.o
+*.dll

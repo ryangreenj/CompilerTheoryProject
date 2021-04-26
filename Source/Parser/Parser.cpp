@@ -2,6 +2,8 @@
 
 #include <algorithm>
 
+#include "CodeGen/CodeGen.h"
+
 #define REQ_PARSE(func) error = func; RET_IF_ERR(error); nodeOut->children.push_back(nextNode)
 #define TRY_PARSE(func) error = func; if (error == ERROR_NONE) nodeOut->children.push_back(nextNode); else if (error != ERROR_NO_OCCURRENCE) return error;
 #define TRY_PARSE_MULTI(func) error = ERROR_NONE; do { error = func; if (error == ERROR_NONE) nodeOut->children.push_back(nextNode); else if(error != ERROR_NO_OCCURRENCE) return error; } while (error == ERROR_NONE)
@@ -41,7 +43,8 @@ static bool IsReservedWord(std::string in)
 Parser::Parser(Lexer *lexerIn)
 {
     m_lexer = lexerIn;
-    m_symbolTable = new SymbolTable();
+    //m_symbolTable = new SymbolTable();
+    SymbolTable::InitSymbolTable();
 
     // ADD RUNTIME PROCEDURES INTO SYMBOL TABLE
     auto boolVec = { ValueType::BOOL };
@@ -49,19 +52,23 @@ Parser::Parser(Lexer *lexerIn)
     auto doubleVec = { ValueType::DOUBLE };
     auto stringVec = { ValueType::STRING };
 
-    m_symbolTable->InsertGlobal("getbool", ValueType::BOOL, true, 0);
-    m_symbolTable->InsertGlobal("getinteger", ValueType::INT, true, 0);
-    m_symbolTable->InsertGlobal("getfloat", ValueType::DOUBLE, true, 0);
-    m_symbolTable->InsertGlobal("getstring", ValueType::STRING, true, 0);
-    m_symbolTable->InsertGlobal("putbool", ValueType::BOOL, true, 0, boolVec);
-    m_symbolTable->InsertGlobal("putinteger", ValueType::BOOL, true, 0, intVec);
-    m_symbolTable->InsertGlobal("putfloat", ValueType::BOOL, true, 0, doubleVec);
-    m_symbolTable->InsertGlobal("putstring", ValueType::BOOL, true, 0, stringVec);
-    m_symbolTable->InsertGlobal("sqrt", ValueType::DOUBLE, true, 0, intVec);
+    SymbolTable::InsertGlobal("getbool", ValueType::BOOL, true, 0);
+    SymbolTable::InsertGlobal("getinteger", ValueType::INT, true, 0);
+    SymbolTable::InsertGlobal("getfloat", ValueType::DOUBLE, true, 0);
+    SymbolTable::InsertGlobal("getstring", ValueType::STRING, true, 0);
+    SymbolTable::InsertGlobal("putbool", ValueType::BOOL, true, 0, boolVec);
+    SymbolTable::InsertGlobal("putinteger", ValueType::BOOL, true, 0, intVec);
+    SymbolTable::InsertGlobal("putfloat", ValueType::BOOL, true, 0, doubleVec);
+    SymbolTable::InsertGlobal("putstring", ValueType::BOOL, true, 0, stringVec);
+    SymbolTable::InsertGlobal("sqrt", ValueType::DOUBLE, true, 0, intVec);
+
+    SymbolTable::InsertGlobal("printf", ValueType::INT, true, 0);
 }
 
 ParseNodeP Parser::Parse()
 {
+    CodeGen::InitCodeGen();
+
     TokenP currToken = new Token();
     m_lexer->GetNextToken(currToken);
 
@@ -72,6 +79,10 @@ ParseNodeP Parser::Parse()
     {
         Error::ReportError(error, currToken);
     }
+
+    CodeGen::EndCodeGen();
+
+    //CodeGen::Print();
 
     return error == ERROR_NONE ? nextNode : nullptr;
 }
@@ -270,10 +281,16 @@ ERROR_TYPE Parser::ProcedureDeclaration(TokenPR currToken, ParseNodePR nodeOut, 
     ParseNodeP nextNode = nullptr;
     REQ_PARSE(ProcedureHeader(currToken, nextNode, false, hasGlobal));
 
+    llvm::Function *F = nextNode->IRFunction;
+
+    CodeGen::ProcedureDeclaration(F);
+
     nextNode = nullptr;
     REQ_PARSE(ProcedureBody(currToken, nextNode, true));
 
-    RET_IF_ERR(m_symbolTable->DeleteLevel()); // Delete scope after the procedure body
+    nodeOut->IRFunction = CodeGen::ProcedureEnd(F);
+
+    RET_IF_ERR(SymbolTable::DeleteLevel()); // Delete scope after the procedure body
 
     return ERROR_NONE;
 }
@@ -305,7 +322,7 @@ ERROR_TYPE Parser::VariableDeclaration(TokenPR currToken, ParseNodePR nodeOut, b
 
             nodeOut->valueType = nodeType;
 
-            if (currToken->type == T_LSQBRACKET)
+            if (currToken->type == T_LSQBRACKET) // TODO: Codegen array type
             {
                 NEXT_TOKEN;
 
@@ -321,12 +338,14 @@ ERROR_TYPE Parser::VariableDeclaration(TokenPR currToken, ParseNodePR nodeOut, b
 
                 if (hasGlobal)
                 {
-                    RET_IF_ERR(m_symbolTable->InsertGlobal(ident, nodeType, false, bound));
+                    RET_IF_ERR(SymbolTable::InsertGlobal(ident, nodeType, false, bound));
                 }
                 else
                 {
-                    RET_IF_ERR(m_symbolTable->Insert(ident, nodeType, false, bound));
+                    RET_IF_ERR(SymbolTable::Insert(ident, nodeType, false, bound));
                 }
+
+                CodeGen::VariableDeclaration(ident, nodeType, hasGlobal, bound);
 
                 if (currToken->type == T_RSQBRACKET)
                 {
@@ -339,11 +358,69 @@ ERROR_TYPE Parser::VariableDeclaration(TokenPR currToken, ParseNodePR nodeOut, b
             // Insert into symbol table
             if (hasGlobal)
             {
-                RET_IF_ERR(m_symbolTable->InsertGlobal(ident, nodeType, false, 0));
+                RET_IF_ERR(SymbolTable::InsertGlobal(ident, nodeType, false, 0));
             }
             else
             {
-                RET_IF_ERR(m_symbolTable->Insert(ident, nodeType, false, 0));
+                RET_IF_ERR(SymbolTable::Insert(ident, nodeType, false, 0));
+            }
+
+            CodeGen::VariableDeclaration(ident, nodeType, hasGlobal);
+
+            return ERROR_NONE;
+        }
+        return ERROR_MISSING_COLON;
+    }
+
+    return required ? ERROR_INVALID_VARIABLE_DECLARATION : ERROR_NO_OCCURRENCE;
+}
+
+ERROR_TYPE Parser::VariableDeclarationNoInsert(TokenPR currToken, ParseNodePR nodeOut, bool required)
+{
+    ERROR_TYPE error = ERROR_NONE;
+    nodeOut = std::make_shared<ParseNode>();
+    nodeOut->type = NodeType::VARIABLE_DECLARATION;
+
+    if (IS_CERTAIN_WORD(currToken, "variable"))
+    {
+        NEXT_TOKEN;
+
+        ParseNodeP nextNode = nullptr;
+        REQ_PARSE(Identifier(currToken, nextNode, true));
+
+        nodeOut->token = nextNode->token; // Pass name up
+
+        if (currToken->type == T_COLON)
+        {
+            NEXT_TOKEN;
+
+            nextNode = nullptr;
+            REQ_PARSE(TypeMark(currToken, nextNode, true));
+
+            ValueType nodeType = nextNode->valueType;
+
+            nodeOut->valueType = nodeType;
+
+            if (currToken->type == T_LSQBRACKET)
+            {
+                NEXT_TOKEN;
+
+                nextNode = nullptr;
+                REQ_PARSE(Bound(currToken, nextNode, true));
+
+                int bound = std::get<int>(nextNode->token->value);
+
+                // Insert into symbol table
+                nodeType = (ValueType)((int)nodeType + NOT_TO_ARRAY);
+
+                nodeOut->valueType = nodeType;
+
+                if (currToken->type == T_RSQBRACKET)
+                {
+                    NEXT_TOKEN;
+                    return ERROR_NONE;
+                }
+                return ERROR_MISSING_BRACKET;
             }
 
             return ERROR_NONE;
@@ -370,6 +447,10 @@ ERROR_TYPE Parser::ProcedureHeader(TokenPR currToken, ParseNodePR nodeOut, bool 
         // Save ident for later
         std::string ident = std::get<std::string>(nextNode->token->value);
 
+        // LLVM IR Codegen
+        std::vector<llvm::Type *> ArgTypes;
+        std::vector<std::string> paramNames = std::vector<std::string>();
+
         if (currToken->type == T_COLON)
         {
             NEXT_TOKEN;
@@ -383,29 +464,75 @@ ERROR_TYPE Parser::ProcedureHeader(TokenPR currToken, ParseNodePR nodeOut, bool 
                 NEXT_TOKEN;
 
                 // Create new level of scope now for parameters and everything else
-                RET_IF_ERR(m_symbolTable->AddLevel());
+                RET_IF_ERR(SymbolTable::AddLevel());
 
                 nextNode = nullptr;
                 TRY_PARSE(ParameterList(currToken, nextNode)); // Optional
 
                 std::vector<ValueType> paramTypes = std::vector<ValueType>();
+                
                 if (nextNode) // Parameter List
                 {
                     for (ParseNodeP param : nextNode->children)
                     {
+                        std::string ident = std::get<std::string>(param->token->value);
+
                         paramTypes.push_back(param->valueType);
+                        paramNames.push_back(ident);
+
+                        SymbolTable::Insert(ident, param->valueType, false, 0);
+
+                        switch (param->valueType)
+                        {
+                        case ValueType::BOOL:
+                            ArgTypes.push_back(CodeGen::BoolType());
+                            break;
+                        case ValueType::INT:
+                            ArgTypes.push_back(CodeGen::IntType());
+                            break;
+                        case ValueType::DOUBLE:
+                            ArgTypes.push_back(CodeGen::DoubleType());
+                            break;
+                        case ValueType::STRING:
+                            ArgTypes.push_back(CodeGen::StringType());
+                            break;
+                        default:
+                            break;
+                        }
                     }
                 }
 
                 // Add procedure name to symbol table
                 if (hasGlobal)
                 {
-                    RET_IF_ERR(m_symbolTable->InsertGlobal(ident, procedureReturnType, true, 0, paramTypes));
+                    RET_IF_ERR(SymbolTable::InsertGlobal(ident, procedureReturnType, true, 0, paramTypes));
                 }
                 else
                 {
-                    RET_IF_ERR(m_symbolTable->InsertUp(ident, procedureReturnType, true, 0, paramTypes));
+                    RET_IF_ERR(SymbolTable::InsertUp(ident, procedureReturnType, true, 0, paramTypes));
                 }
+
+                llvm::Type *IRProcReturnType = nullptr;
+
+                switch (procedureReturnType)
+                {
+                case ValueType::BOOL:
+                    IRProcReturnType = CodeGen::BoolType();
+                    break;
+                case ValueType::INT:
+                    IRProcReturnType = CodeGen::IntType();
+                    break;
+                case ValueType::DOUBLE:
+                    IRProcReturnType = CodeGen::DoubleType();
+                    break;
+                case ValueType::STRING:
+                    IRProcReturnType = CodeGen::StringType();
+                    break;
+                default:
+                    break;
+                }
+
+                nodeOut->IRFunction = CodeGen::ProcedureHeader(ident, IRProcReturnType, paramNames, ArgTypes);
 
                 if (currToken->type == T_RPAREN)
                 {
@@ -525,7 +652,8 @@ ERROR_TYPE Parser::Parameter(TokenPR currToken, ParseNodePR nodeOut, bool requir
     nodeOut->type = NodeType::PARAMETER;
 
     ParseNodeP nextNode = nullptr;
-    REQ_PARSE(VariableDeclaration(currToken, nextNode, required));
+    REQ_PARSE(VariableDeclarationNoInsert(currToken, nextNode, required));
+    nodeOut->token = nextNode->token; // Pass variable name up
     nodeOut->valueType = nextNode->valueType; // Pass VariableDeclaration type up
 
     return ERROR_NONE;
@@ -557,7 +685,13 @@ ERROR_TYPE Parser::AssignmentStatement(TokenPR currToken, ParseNodePR nodeOut, b
     ParseNodeP nextNode = nullptr;
     REQ_PARSE(Destination(currToken, nextNode, required));
 
+    std::string ident = std::get<std::string>(nextNode->children[0]->token->value);
     ValueType destType = nextNode->valueType;
+    llvm::Value *indexVal = nullptr;
+    if (nextNode->children.size() == 2)
+    {
+        indexVal = nextNode->children[1]->IRVal;
+    }
 
     if (currToken->type == T_ASSIGN)
     {
@@ -578,7 +712,9 @@ ERROR_TYPE Parser::AssignmentStatement(TokenPR currToken, ParseNodePR nodeOut, b
             return ERROR_MISMATCHED_TYPES;
         }
 
-        return error;
+        nodeOut->IRVal = CodeGen::AssignmentStatement(ident, indexVal, nextNode->IRVal);
+
+        return ERROR_NONE;
     }
     else
     {
@@ -615,6 +751,12 @@ ERROR_TYPE Parser::IfStatement(TokenPR currToken, ParseNodePR nodeOut, bool requ
     }
     NEXT_TOKEN;
 
+    // Codegen if header
+    llvm::BasicBlock *ThenBB = nullptr, *ElseBB = nullptr, *MergeBB = nullptr;
+    llvm::Function *TheFunction = nullptr;
+
+    CodeGen::IfStatement(nextNode->IRVal, ThenBB, ElseBB, MergeBB, TheFunction);
+
     if (!IS_CERTAIN_WORD(currToken, "then"))
     {
         return ERROR_INVALID_IF_STATEMENT;
@@ -623,6 +765,8 @@ ERROR_TYPE Parser::IfStatement(TokenPR currToken, ParseNodePR nodeOut, bool requ
 
     nextNode = nullptr;
     TRY_PARSE_MULTI(Statement(currToken, nextNode));
+
+    CodeGen::ElseStatement(ThenBB, ElseBB, MergeBB, TheFunction);
 
     if (IS_CERTAIN_WORD(currToken, "else"))
     {
@@ -636,6 +780,8 @@ ERROR_TYPE Parser::IfStatement(TokenPR currToken, ParseNodePR nodeOut, bool requ
         nextNode = nullptr;
         TRY_PARSE_MULTI(Statement(currToken, nextNode));
     }
+
+    CodeGen::EndIfStatement(ThenBB, ElseBB, MergeBB, TheFunction);
 
     if (IS_CERTAIN_WORD(currToken, "end"))
     {
@@ -677,6 +823,12 @@ ERROR_TYPE Parser::LoopStatement(TokenPR currToken, ParseNodePR nodeOut, bool re
     }
     NEXT_TOKEN;
 
+    // Codegen for header
+    llvm::BasicBlock *ForCheckBB = nullptr, *LoopBB = nullptr, *AfterForBB = nullptr;
+    llvm::Function *TheFunction = nullptr;
+
+    CodeGen::ForStatementHeader(ForCheckBB, LoopBB, AfterForBB, TheFunction);
+
     nextNode = nullptr;
     REQ_PARSE(Expression(currToken, nextNode, true));
 
@@ -686,8 +838,13 @@ ERROR_TYPE Parser::LoopStatement(TokenPR currToken, ParseNodePR nodeOut, bool re
     }
     NEXT_TOKEN;
 
+    // Codegen loop instruction
+    CodeGen::ForStatementCheck(nextNode->IRVal, ForCheckBB, LoopBB, AfterForBB, TheFunction);
+
     nextNode = nullptr;
     TRY_PARSE_MULTI(Statement(currToken, nextNode));
+
+    CodeGen::EndForStatement(ForCheckBB, LoopBB, AfterForBB, TheFunction);
 
     if (IS_CERTAIN_WORD(currToken, "end"))
     {
@@ -717,6 +874,8 @@ ERROR_TYPE Parser::ReturnStatement(TokenPR currToken, ParseNodePR nodeOut, bool 
 
     ParseNodeP nextNode = nullptr;
     REQ_PARSE(Expression(currToken, nextNode, true));
+
+    nodeOut->IRVal = CodeGen::ReturnStatement(nextNode->IRVal);
 
     return ERROR_NONE;
 }
@@ -757,7 +916,7 @@ ERROR_TYPE Parser::Destination(TokenPR currToken, ParseNodePR nodeOut, bool requ
 
     
     Symbol *destinationSymbol = nullptr;
-    m_symbolTable->Lookup(std::get<std::string>(nextNode->token->value), destinationSymbol);
+    SymbolTable::Lookup(std::get<std::string>(nextNode->token->value), destinationSymbol);
 
     if (!destinationSymbol)
     {
@@ -804,9 +963,11 @@ ERROR_TYPE Parser::Expression(TokenPR currToken, ParseNodePR nodeOut, bool requi
 
     bool done = true;
     bool requiredThisPass = required;
-    bool hasNot = false;
 
     ValueType valueType = ValueType::NOTHING;
+
+    llvm::Value *LHS = nullptr, *RHS = nullptr;
+    TOKEN_TYPE opType = T_UNKNOWN;
 
     do
     {
@@ -816,11 +977,21 @@ ERROR_TYPE Parser::Expression(TokenPR currToken, ParseNodePR nodeOut, bool requi
             notNode->type = NodeType::SYMBOL;
             notNode->token = currToken;
             nodeOut->children.push_back(notNode);
-            
-            requiredThisPass = true;
-            hasNot = true;
 
             NEXT_TOKEN;
+
+            ParseNodeP nextNode = nullptr;
+            REQ_PARSE(ArithOp(currToken, nextNode, true));
+
+            if (nextNode->valueType != ValueType::BOOL && nextNode->valueType != ValueType::INT) // 'Not' only works for bool or int
+            {
+                return ERROR_INVALID_OPERAND;
+            }
+
+            nodeOut->valueType = nextNode->valueType;
+            nodeOut->IRVal = CodeGen::NegateExpr(nextNode->IRVal);
+
+            return ERROR_NONE;
         }
 
         ParseNodeP nextNode = nullptr;
@@ -829,12 +1000,8 @@ ERROR_TYPE Parser::Expression(TokenPR currToken, ParseNodePR nodeOut, bool requi
 
         if (valueType == ValueType::NOTHING) // First pass
         {
-            if (hasNot && nextNode->valueType != ValueType::BOOL && nextNode->valueType != ValueType::INT) // 'Not' only works for bool or int
-            {
-                return ERROR_INVALID_OPERAND;
-            }
-            hasNot = false;
             valueType = nextNode->valueType;
+            LHS = nextNode->IRVal;
         }
         else
         {
@@ -843,6 +1010,8 @@ ERROR_TYPE Parser::Expression(TokenPR currToken, ParseNodePR nodeOut, bool requi
             {
                 return ERROR_MISMATCHED_TYPES;
             }
+            RHS = nextNode->IRVal;
+            LHS = CodeGen::ExprExpr(LHS, RHS, opType);
         }
 
         if (currToken->type == T_AND || currToken->type == T_OR)
@@ -861,11 +1030,14 @@ ERROR_TYPE Parser::Expression(TokenPR currToken, ParseNodePR nodeOut, bool requi
             opNode->token = currToken;
             nodeOut->children.push_back(opNode);
 
+            opType = currToken->type;
+
             NEXT_TOKEN;
         }
     } while (!done);
 
     nodeOut->valueType = valueType;
+    nodeOut->IRVal = LHS;
 
     return ERROR_NONE;
 }
@@ -881,6 +1053,9 @@ ERROR_TYPE Parser::ArithOp(TokenPR currToken, ParseNodePR nodeOut, bool required
 
     ValueType valueType = ValueType::NOTHING;
 
+    llvm::Value *LHS = nullptr, *RHS = nullptr;
+    TOKEN_TYPE opType = T_UNKNOWN;
+
     do
     {
         ParseNodeP nextNode = nullptr;
@@ -890,6 +1065,7 @@ ERROR_TYPE Parser::ArithOp(TokenPR currToken, ParseNodePR nodeOut, bool required
         if (valueType == ValueType::NOTHING) // First pass
         {
             valueType = nextNode->valueType;
+            LHS = nextNode->IRVal;
         }
         else
         {
@@ -897,6 +1073,8 @@ ERROR_TYPE Parser::ArithOp(TokenPR currToken, ParseNodePR nodeOut, bool required
             {
                 valueType = ValueType::DOUBLE; // Int -> Double
             }
+            RHS = nextNode->IRVal;
+            LHS = CodeGen::ArithOpExpr(LHS, RHS, opType);
         }
 
         if (currToken->type == T_ADD || currToken->type == T_SUBTRACT)
@@ -914,11 +1092,14 @@ ERROR_TYPE Parser::ArithOp(TokenPR currToken, ParseNodePR nodeOut, bool required
             opNode->token = currToken;
             nodeOut->children.push_back(opNode);
 
+            opType = currToken->type;
+
             NEXT_TOKEN;
         }
     } while (!done);
 
     nodeOut->valueType = valueType;
+    nodeOut->IRVal = LHS;
 
     return ERROR_NONE;
 }
@@ -935,23 +1116,29 @@ ERROR_TYPE Parser::Relation(TokenPR currToken, ParseNodePR nodeOut, bool require
 
     ValueType valueType = ValueType::NOTHING;
 
+    llvm::Value *LHS = nullptr, *RHS = nullptr;
+    TOKEN_TYPE opType = T_UNKNOWN;
+
     do
     {
         ParseNodeP nextNode = nullptr;
         REQ_PARSE(Term(currToken, nextNode, requiredThisPass));
         done = true;
 
-        if (valueType == ValueType::NOTHING)
+        if (valueType == ValueType::NOTHING) // First LHS
         {
             valueType = nextNode->valueType;
+            LHS = nextNode->IRVal;
         }
-        else
+        else // RHS
         {
             if (valueType == ValueType::STRING) // If prev is a string, both need to be strings
             {
                 if (canBeString && valueType == nextNode->valueType)
                 {
                     valueType = ValueType::BOOL;
+                    RHS = nextNode->IRVal;
+                    LHS = CodeGen::FactorExpr(LHS, RHS, opType);
                 }
                 else
                 {
@@ -961,6 +1148,8 @@ ERROR_TYPE Parser::Relation(TokenPR currToken, ParseNodePR nodeOut, bool require
             else
             {
                 valueType = ValueType::BOOL; // Other types can convert between themselves
+                RHS = nextNode->IRVal;
+                LHS = CodeGen::FactorExpr(LHS, RHS, opType);
             }
         }
 
@@ -984,11 +1173,14 @@ ERROR_TYPE Parser::Relation(TokenPR currToken, ParseNodePR nodeOut, bool require
             opNode->token = currToken;
             nodeOut->children.push_back(opNode);
 
+            opType = currToken->type;
+
             NEXT_TOKEN;
         }
     } while (!done);
 
     nodeOut->valueType = valueType;
+    nodeOut->IRVal = LHS;
 
     return ERROR_NONE;
 }
@@ -1004,27 +1196,35 @@ ERROR_TYPE Parser::Term(TokenPR currToken, ParseNodePR nodeOut, bool required)
 
     ValueType valueType = ValueType::NOTHING;
 
+    llvm::Value *LHS = nullptr, *RHS = nullptr;
+    TOKEN_TYPE opType = T_UNKNOWN;
+
     do
     {
         ParseNodeP nextNode = nullptr;
         REQ_PARSE(Factor(currToken, nextNode, requiredThisPass));
         done = true;
 
-        if (valueType == ValueType::NOTHING)
+        if (valueType == ValueType::NOTHING) // First LHS
         {
             valueType = nextNode->valueType;
+            LHS = nextNode->IRVal;
         }
-        else
+        else // RHS
         {
             if (nextNode->valueType == ValueType::STRING)
             {
                 return ERROR_INVALID_OPERAND;
             }
 
+            // Figure out type and codegen
             if (nextNode->valueType > valueType) // BOOL --> INT --> DOUBLE, stay at 'highest' one
             {
                 valueType = nextNode->valueType;
             }
+
+            RHS = nextNode->IRVal;
+            LHS = CodeGen::TermExpr(LHS, RHS, opType);
         }
 
         if (currToken->type == T_MULTIPLY || currToken->type == T_DIVIDE)
@@ -1042,11 +1242,14 @@ ERROR_TYPE Parser::Term(TokenPR currToken, ParseNodePR nodeOut, bool required)
             opNode->token = currToken;
             nodeOut->children.push_back(opNode);
 
+            opType = currToken->type;
+
             NEXT_TOKEN;
         }
     } while (!done);
 
     nodeOut->valueType = valueType;
+    nodeOut->IRVal = LHS;
 
     return ERROR_NONE;
 }
@@ -1065,6 +1268,7 @@ ERROR_TYPE Parser::Factor(TokenPR currToken, ParseNodePR nodeOut, bool required)
         REQ_PARSE(Expression(currToken, nextNode, true));
 
         nodeOut->valueType = nextNode->valueType;
+        nodeOut->IRVal = nextNode->IRVal;
 
         if (currToken->type == T_RPAREN)
         {
@@ -1085,7 +1289,7 @@ ERROR_TYPE Parser::Factor(TokenPR currToken, ParseNodePR nodeOut, bool required)
         trueNode->token = currToken;
         nodeOut->children.push_back(trueNode);
         nodeOut->valueType = ValueType::BOOL;
-
+        nodeOut->IRVal = CodeGen::BoolExpr(true);
 
         NEXT_TOKEN;
 
@@ -1102,6 +1306,7 @@ ERROR_TYPE Parser::Factor(TokenPR currToken, ParseNodePR nodeOut, bool required)
         falseNode->token = currToken;
         nodeOut->children.push_back(falseNode);
         nodeOut->valueType = ValueType::BOOL;
+        nodeOut->IRVal = CodeGen::BoolExpr(false);
 
         NEXT_TOKEN;
 
@@ -1137,10 +1342,13 @@ ERROR_TYPE Parser::Factor(TokenPR currToken, ParseNodePR nodeOut, bool required)
                 }
             }
             nodeOut->valueType = nextNode->valueType;
+            nodeOut->IRVal = CodeGen::NegateExpr(nextNode->IRVal);
+
             return ERROR_NONE;
         }
 
         nodeOut->valueType = nextNode->valueType;
+        nodeOut->IRVal = CodeGen::NegateExpr(nextNode->IRVal); // Create negation of child NAME node
 
         return ERROR_NONE;
     }
@@ -1170,12 +1378,18 @@ ERROR_TYPE Parser::Factor(TokenPR currToken, ParseNodePR nodeOut, bool required)
                 }
             }
             nodeOut->valueType = ValueType::STRING;
+            nodeOut->IRVal = nextNode->IRVal;
+
             return ERROR_NONE;
         }
         nodeOut->valueType = nextNode->valueType;
+        nodeOut->IRVal = nextNode->IRVal;
+
         return ERROR_NONE;
     }
     nodeOut->valueType = nextNode->valueType;
+    nodeOut->IRVal = nextNode->IRVal;
+
     return ERROR_NONE;
 }
 
@@ -1193,7 +1407,7 @@ ERROR_TYPE Parser::ProcedureCallOrName(TokenPR currToken, ParseNodePR nodeOut, b
         NEXT_TOKEN;
 
         Symbol *procedureSymbol = nullptr;
-        m_symbolTable->Lookup(std::get<std::string>(nextNode->token->value), procedureSymbol);
+        SymbolTable::Lookup(std::get<std::string>(nextNode->token->value), procedureSymbol);
 
         if (!procedureSymbol)
         {
@@ -1205,7 +1419,16 @@ ERROR_TYPE Parser::ProcedureCallOrName(TokenPR currToken, ParseNodePR nodeOut, b
         nextNode = nullptr;
         TRY_PARSE(ArgumentList(currToken, nextNode)); // Optional
 
-        if (nextNode) // Check arguments
+        std::vector<llvm::Value *> ArgIRVals;
+
+        if (procedureSymbol->identifier.compare("printf") == 0) // TODO: Remove testing
+        {
+            for (int i = 0; i < nextNode->children.size(); ++i)
+            {
+                ArgIRVals.push_back(nextNode->children[i]->IRVal);
+            }
+        }
+        else if (nextNode) // Check arguments
         {
             if (nextNode->children.size() != procedureSymbol->functionParameterTypes.size())
             {
@@ -1218,8 +1441,11 @@ ERROR_TYPE Parser::ProcedureCallOrName(TokenPR currToken, ParseNodePR nodeOut, b
                 {
                     return ERROR_ARGUMENTS_DONT_MATCH;
                 }
+                ArgIRVals.push_back(nextNode->children[i]->IRVal);
             }
         }
+
+        nodeOut->IRVal = CodeGen::ProcedureCall(procedureSymbol->identifier, ArgIRVals);
 
         if (currToken->type == T_RPAREN)
         {
@@ -1233,7 +1459,7 @@ ERROR_TYPE Parser::ProcedureCallOrName(TokenPR currToken, ParseNodePR nodeOut, b
         nodeOut->type = NodeType::NAME;
 
         Symbol *nameSymbol = nullptr;
-        m_symbolTable->Lookup(std::get<std::string>(nextNode->token->value), nameSymbol);
+        SymbolTable::Lookup(std::get<std::string>(nextNode->token->value), nameSymbol);
 
         if (!nameSymbol)
         {
@@ -1241,7 +1467,7 @@ ERROR_TYPE Parser::ProcedureCallOrName(TokenPR currToken, ParseNodePR nodeOut, b
         }
 
         nodeOut->valueType = nameSymbol->type;
-
+        
         if (currToken->type == T_LSQBRACKET)
         {
             NEXT_TOKEN;
@@ -1261,6 +1487,8 @@ ERROR_TYPE Parser::ProcedureCallOrName(TokenPR currToken, ParseNodePR nodeOut, b
                 return ERROR_EXPECTED_INT;
             }
 
+            nodeOut->IRVal = CodeGen::VariableExpr(nameSymbol->identifier, nextNode->IRVal); // TODO: Handle arrays codegen
+
             if (currToken->type == T_RSQBRACKET)
             {
                 NEXT_TOKEN;
@@ -1268,6 +1496,8 @@ ERROR_TYPE Parser::ProcedureCallOrName(TokenPR currToken, ParseNodePR nodeOut, b
             }
             return ERROR_MISSING_BRACKET;
         }
+
+        nodeOut->IRVal = CodeGen::VariableExpr(nameSymbol->identifier); // TODO: Handle arrays codegen
         return ERROR_NONE;
     }
 
@@ -1284,7 +1514,7 @@ ERROR_TYPE Parser::Name(TokenPR currToken, ParseNodePR nodeOut, bool required)
     REQ_PARSE(Identifier(currToken, nextNode, required));
 
     Symbol *nameSymbol = nullptr;
-    m_symbolTable->Lookup(std::get<std::string>(nextNode->token->value), nameSymbol);
+    SymbolTable::Lookup(std::get<std::string>(nextNode->token->value), nameSymbol);
 
     if (!nameSymbol)
     {
@@ -1292,7 +1522,7 @@ ERROR_TYPE Parser::Name(TokenPR currToken, ParseNodePR nodeOut, bool required)
     }
 
     nodeOut->valueType = nameSymbol->type;
-
+    
     if (currToken->type == T_LSQBRACKET)
     {
         NEXT_TOKEN;
@@ -1312,6 +1542,8 @@ ERROR_TYPE Parser::Name(TokenPR currToken, ParseNodePR nodeOut, bool required)
             return ERROR_EXPECTED_INT;
         }
 
+        nodeOut->IRVal = CodeGen::VariableExpr(nameSymbol->identifier, nextNode->IRVal);
+
         if (currToken->type == T_RSQBRACKET)
         {
             NEXT_TOKEN;
@@ -1319,6 +1551,8 @@ ERROR_TYPE Parser::Name(TokenPR currToken, ParseNodePR nodeOut, bool required)
         }
         return ERROR_MISSING_BRACKET;
     }
+
+    nodeOut->IRVal = CodeGen::VariableExpr(nameSymbol->identifier); // TODO: Handle arrays codegen
 
     return ERROR_NONE;
 }
@@ -1336,10 +1570,12 @@ ERROR_TYPE Parser::Number(TokenPR currToken, ParseNodePR nodeOut, bool required)
         if (currToken->type == T_INTCONST)
         {
             nodeOut->valueType = ValueType::INT;
+            nodeOut->IRVal = CodeGen::IntExpr(std::get<int>(nodeOut->token->value));
         }
         else
         {
             nodeOut->valueType = ValueType::DOUBLE;
+            nodeOut->IRVal = CodeGen::FloatExpr(std::get<double>(nodeOut->token->value));
         }
 
         NEXT_TOKEN;
@@ -1358,6 +1594,10 @@ ERROR_TYPE Parser::String(TokenPR currToken, ParseNodePR nodeOut, bool required)
     if (currToken->type == T_STRINGCONST)
     {
         nodeOut->token = currToken;
+
+        nodeOut->valueType = ValueType::STRING;
+        nodeOut->IRVal = CodeGen::StringExpr(std::get<std::string>(nodeOut->token->value));
+
         NEXT_TOKEN;
         return ERROR_NONE;
     }

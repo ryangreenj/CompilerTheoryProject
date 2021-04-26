@@ -8,4 +8,6 @@ Build the project using the following command:
 
 Then run the resulting output using:
 
-`./Compiler`
+`./Compiler [InFileName] [OutFileName]`
+
+You can then execute the resulting  output file
